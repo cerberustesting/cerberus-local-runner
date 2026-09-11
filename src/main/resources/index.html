@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cerberus Local Runner</title>
+  <link rel="icon" type="image/png" href="/cerberus-logo.png">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+      --crb-new-bg: rgba(255, 255, 255, 0.95);
+      --crb-new-border: #dbe3ee;
+      --crb-bg: #f5f6fa;
+
+      --crb-blue-color: rgb(44, 123, 229);
+      --crb-blue-light-color: rgb(230, 239, 252);
+      --crb-blue-dark-color: rgb(25, 72, 134);
+
+      --crb-green-color: #10b981;
+      --crb-green-light-color: #ecfdf5;
+      --crb-green-dark-color: #065f46;
+
+      --crb-orange-color: rgb(245, 128, 62);
+      --crb-orange-light-color: rgb(254, 240, 232);
+      --crb-orange-dark-color: rgb(171, 89, 43);
+
+      --crb-red-color: rgb(230, 55, 87);
+      --crb-red-light-color: rgb(252, 231, 235);
+      --crb-red-dark-color: rgb(171, 42, 65);
+
+      --crb-grey-color: #aaaaaa;
+      --crb-grey-light-color: #e7e7e7;
+
+      --crb-text: #1e293b;
+      --crb-text-muted: #64748b;
+      --crb-text-label: #64748b;
+    }
+
+    /* Auto: follow the OS/browser preference unless the user picked a theme explicitly. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --crb-new-bg: rgba(30, 41, 59, 0.95);
+        --crb-new-border: #334155;
+        --crb-bg: #1e222a;
+
+        --crb-blue-light-color: rgb(38, 60, 94);
+        --crb-blue-dark-color: rgb(153, 190, 241);
+
+        --crb-green-color: #34d399;
+        --crb-green-light-color: rgb(22, 60, 48);
+        --crb-green-dark-color: rgb(145, 235, 196);
+
+        --crb-orange-light-color: rgb(66, 41, 28);
+        --crb-orange-dark-color: rgb(247, 189, 157);
+
+        --crb-red-light-color: rgb(70, 34, 42);
+        --crb-red-dark-color: rgb(245, 165, 178);
+
+        --crb-grey-color: #bbbbbb;
+        --crb-grey-light-color: #3a3a3a;
+
+        --crb-text: #f1f5f9;
+        --crb-text-muted: #94a3b8;
+        --crb-text-label: #94a3b8;
+      }
+    }
+
+    /* Explicit: the toggle button forces a theme regardless of the OS preference. */
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --crb-new-bg: rgba(30, 41, 59, 0.95);
+      --crb-new-border: #334155;
+      --crb-bg: #1e222a;
+
+      --crb-blue-light-color: rgb(38, 60, 94);
+      --crb-blue-dark-color: rgb(153, 190, 241);
+
+      --crb-green-color: #34d399;
+      --crb-green-light-color: rgb(22, 60, 48);
+      --crb-green-dark-color: rgb(145, 235, 196);
+
+      --crb-orange-light-color: rgb(66, 41, 28);
+      --crb-orange-dark-color: rgb(247, 189, 157);
+
+      --crb-red-light-color: rgb(70, 34, 42);
+      --crb-red-dark-color: rgb(245, 165, 178);
+
+      --crb-grey-color: #bbbbbb;
+      --crb-grey-light-color: #3a3a3a;
+
+      --crb-text: #f1f5f9;
+      --crb-text-muted: #94a3b8;
+      --crb-text-label: #94a3b8;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--crb-bg); color: var(--crb-text); }
+    main { width: min(980px, calc(100% - 32px)); margin: 48px auto; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:28px; }
+    .brand { display:flex; align-items:center; gap:14px; }
+    .brand-logo { width:40px; height:40px; object-fit:contain; }
+    /* Light theme: dark-on-transparent logo (cerberus_logo_light.png). Dark theme: the grey/blue one. */
+    .brand-logo-dark { display:none; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .brand-logo-light { display:none; }
+      :root:not([data-theme="light"]) .brand-logo-dark { display:block; }
+    }
+    :root[data-theme="dark"] .brand-logo-light { display:none; }
+    :root[data-theme="dark"] .brand-logo-dark { display:block; }
+    h1 { margin:0; font-size:26px; font-weight:700; letter-spacing:-.02em; }
+    .subtitle { color:var(--crb-text-muted); margin-top:6px; font-size:14px; }
+
+    .badge { padding:6px 14px; border-radius:999px; background:var(--crb-grey-light-color); color:var(--crb-text-muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .badge.READY { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); }
+    .badge.ERROR, .badge.DISCONNECTED { background:var(--crb-red-light-color); color:var(--crb-red-dark-color); }
+    .badge.STARTING, .badge.STOPPING { background:var(--crb-orange-light-color); color:var(--crb-orange-dark-color); }
+    .badge.LOADING { background:var(--crb-blue-light-color); color:var(--crb-blue-dark-color); }
+
+    .header-actions { display:flex; align-items:center; gap:12px; }
+    .theme-toggle {
+      width:36px; height:36px; padding:0; border-radius:10px; font-size:16px; line-height:1;
+      background:var(--crb-grey-light-color); color:var(--crb-text);
+    }
+    .theme-toggle:hover { background:var(--crb-new-border); }
+
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
+    .card {
+      background: var(--crb-new-bg);
+      border: 1px solid var(--crb-new-border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgb(15 23 42 / 0.06);
+    }
+    .card:hover { border-color: rgba(14,165,233,.3); }
+    .label { color:var(--crb-text-label); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+    .value { margin-top:10px; font-weight:600; color:var(--crb-text); overflow-wrap:anywhere; }
+    .actions { display:flex; gap:12px; margin:18px 0; }
+    button { border:0; border-radius:8px; padding:10px 16px; font:inherit; font-size:14px; font-weight:600; cursor:pointer; transition:background-color .15s ease; }
+    .primary { background:var(--crb-blue-color); color:#fff; }
+    .primary:hover:not(:disabled) { background:var(--crb-blue-dark-color); }
+    .secondary { background:var(--crb-grey-light-color); color:var(--crb-text); }
+    .secondary:hover:not(:disabled) { background:var(--crb-new-border); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .error { display:none; color:var(--crb-red-dark-color); background:var(--crb-red-light-color); border-radius:10px; padding:12px; margin:12px 0; font-size:13.5px; }
+
+    .card.logs { padding: 0; overflow: hidden; }
+    .card.logs .label { padding:12px 16px 0; margin:0; }
+    .card.logs .log-tabs { padding:8px 16px 0; margin:0 0 0; border-bottom:1px solid var(--crb-new-border); }
+    .svc-check { display:none; color:var(--crb-green-color); font-weight:700; }
+    .svc-check.show { display:inline; }
+
+    .spinner {
+      display:inline-block; width:14px; height:14px; vertical-align:middle;
+      border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%;
+      animation:crb-spin .7s linear infinite; margin-right:7px;
+    }
+    .spinner.spinner-muted { border-color:var(--crb-new-border); border-top-color:var(--crb-blue-color); }
+    @keyframes crb-spin { to { transform:rotate(360deg); } }
+    pre { height:330px; overflow:auto; white-space:pre-wrap; word-break:break-word; color:var(--crb-text-muted); font:12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin:0; padding:16px; }
+
+    .auth-card { margin-bottom:14px; }
+    .field { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+    .field-label { font-size:12px; font-weight:600; color:var(--crb-text-muted); }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    .row > .field { flex:1; min-width:180px; }
+    input[type="text"], input[type="password"], select {
+      padding:9px 12px; border-radius:8px; border:1px solid var(--crb-new-border);
+      background:transparent; color:var(--crb-text); font:inherit; font-size:13.5px;
+    }
+    select { background:var(--crb-new-bg); }
+    input[type="text"]:focus, input[type="password"]:focus, select:focus { outline:2px solid var(--crb-blue-color); outline-offset:-1px; }
+    .hint { font-size:12px; color:var(--crb-text-muted); }
+
+    .mode-tabs { display:flex; gap:14px; margin-bottom:16px; border-bottom:1px solid var(--crb-new-border); }
+    .mode-tab {
+      padding:8px 2px; margin-bottom:-1px; border:0; border-bottom:2px solid transparent;
+      background:transparent; color:var(--crb-text-muted); font-weight:600; font-size:13.5px; border-radius:0;
+    }
+    .mode-tab:hover { background:transparent; color:var(--crb-text); }
+    .mode-tab.active { color:var(--crb-blue-color); border-bottom-color:var(--crb-blue-color); }
+
+    .copy-field { display:flex; gap:8px; align-items:center; }
+    .copy-field code {
+      flex:1; padding:8px 10px; border-radius:8px; background:var(--crb-grey-light-color);
+      font-size:12px; overflow:auto; white-space:nowrap; color:var(--crb-text);
+    }
+    .small-btn { padding:8px 10px; font-size:12.5px; flex-shrink:0; }
+
+    .connection-status {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:10px 14px; border-radius:10px; background:var(--crb-grey-light-color);
+      margin-top:14px; font-size:13.5px; color:var(--crb-text-muted);
+    }
+    .connection-status.ok { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); }
+    .connection-status.fail { background:var(--crb-red-light-color); color:var(--crb-red-dark-color); }
+
+    .gate-wrap { display:flex; justify-content:center; padding-top:24px; }
+    .gate-wrap .card { width:min(520px, 100%); }
+    .link-btn { background:transparent; padding:0; font-size:13px; font-weight:600; color:var(--crb-blue-color); }
+    .link-btn:hover { background:transparent; text-decoration:underline; }
+    .connection-bar {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:10px 16px; border-radius:12px; background:var(--crb-new-bg); border:1px solid var(--crb-new-border);
+      margin-bottom:20px; font-size:13.5px; color:var(--crb-text-muted);
+    }
+    .connection-bar b { color:var(--crb-text); }
+
+    .robot-card { margin-bottom:14px; }
+    .robot-config { margin:12px 0; padding:12px 14px; border-radius:10px; border:1px solid var(--crb-new-border); background:var(--crb-new-bg); }
+    .robot-config-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:10px; margin-bottom:10px; }
+    .cfg-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--crb-text-label); margin-bottom:2px; }
+    .cfg-value { font-size:13px; color:var(--crb-text); overflow-wrap:anywhere; }
+    .capabilities-list { display:flex; flex-wrap:wrap; gap:6px; }
+    .capability-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px; background:var(--crb-grey-light-color); font-size:12px; color:var(--crb-text); }
+    .capability-chip b { font-weight:600; }
+    .services-card { margin-bottom:14px; }
+
+    .service-table { display:grid; grid-template-columns:110px 1fr 70px 1.4fr; gap:10px 16px; align-items:center; }
+    .service-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--crb-text-label); padding-bottom:8px; border-bottom:1px solid var(--crb-new-border); }
+    .service-row { display:contents; }
+    .service-row > div { padding-bottom:10px; border-bottom:1px solid var(--crb-new-border); font-size:13px; overflow-wrap:anywhere; color:var(--crb-text); }
+    .service-row:last-of-type > div { border-bottom:0; padding-bottom:0; }
+    .service-name { font-weight:600; }
+
+    /* Combobox — inspired by Cerberus's single-select dropdown (include/templates/selectDropdown.html):
+       a bordered button with a chevron, opening a floating panel with a search box and a checkmarked list. */
+    .combobox { position:relative; }
+    .combobox-btn {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      width:100%; height:40px; padding:9px 12px; border-radius:8px; border:1px solid var(--crb-new-border);
+      background:transparent; color:var(--crb-text); font:inherit; font-size:13.5px; text-align:left; cursor:pointer;
+    }
+    .combobox-btn:hover { background:var(--crb-grey-light-color); }
+    .combobox-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .combobox-chevron { width:16px; height:16px; flex-shrink:0; transition:transform .15s ease; color:var(--crb-text-muted); }
+    .combobox.open .combobox-chevron { transform:rotate(180deg); }
+    .combobox-panel {
+      display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:40;
+      background:var(--crb-new-bg); border:1px solid var(--crb-new-border); border-radius:10px;
+      box-shadow:0 10px 30px rgb(15 23 42 / 0.15); overflow:hidden;
+    }
+    .combobox.open .combobox-panel { display:block; }
+    .combobox-search-wrap { padding:8px; border-bottom:1px solid var(--crb-new-border); }
+    .combobox-search { width:100%; height:32px; padding:0 10px; border-radius:6px; border:1px solid var(--crb-new-border); background:transparent; color:var(--crb-text); font:inherit; font-size:13px; }
+    .combobox-list { max-height:220px; overflow:auto; padding:4px; }
+    .combobox-item {
+      display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border-radius:6px;
+      border:0; background:transparent; color:var(--crb-text); font:inherit; font-size:13px; text-align:left; cursor:pointer;
+    }
+    .combobox-item:hover { background:var(--crb-grey-light-color); }
+    .combobox-item.selected { background:var(--crb-blue-light-color); color:var(--crb-blue-dark-color); font-weight:600; }
+    .combobox-item .combobox-check { width:14px; height:14px; flex-shrink:0; color:var(--crb-blue-color); visibility:hidden; }
+    .combobox-item.selected .combobox-check { visibility:visible; }
+    .combobox-empty { padding:10px; font-size:12.5px; color:var(--crb-text-muted); }
+    .combobox-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+    @media (max-width:760px) { .grid { grid-template-columns:1fr; } header { align-items:flex-start; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">
+      <img src="/cerberus_logo_light.png" alt="Cerberus" class="brand-logo brand-logo-light">
+      <img src="/cerberus-logo.png" alt="Cerberus" class="brand-logo brand-logo-dark">
+      <div><h1>Cerberus Local Runner</h1><div class="subtitle" id="appSubtitle">Local Selenium execution bridge</div></div>
+    </div>
+    <div class="header-actions">
+      <button id="themeToggle" class="secondary theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+      <div id="state" class="badge" style="display:none;" title="">LOADING</div>
+    </div>
+  </header>
+
+  <div id="gateView" class="gate-wrap">
+    <section class="card auth-card">
+      <div class="label" style="margin-bottom:14px;">Connect to Cerberus</div>
+
+      <div class="field">
+        <label class="field-label" for="cerberusUrl">Cerberus URL</label>
+        <input type="text" id="cerberusUrl" placeholder="preprod.cerberus-testing.com">
+      </div>
+
+      <div class="mode-tabs">
+        <button type="button" class="mode-tab" id="tabApiKey" onclick="selectAuthMode('apikey')">API Key</button>
+        <button type="button" class="mode-tab" id="tabOAuth" onclick="selectAuthMode('oauth')">OAuth</button>
+      </div>
+
+      <div id="panelApiKey">
+        <div class="field">
+          <label class="field-label" for="apiKey">API Key</label>
+          <input type="password" id="apiKey" placeholder="From your Cerberus profile (User Manager)">
+        </div>
+        <div class="field">
+          <label class="field-label" for="apiKeyLogin">Cerberus login</label>
+          <input type="text" id="apiKeyLogin" placeholder="e.g. bcivel">
+          <div class="hint">Cerberus doesn't expose a way to resolve this from the key alone - needed to name this runner's own "local-runner-&lt;login&gt;" robot.</div>
+        </div>
+        <div class="actions" style="margin:0;">
+          <button class="primary" onclick="saveApiKey()">Save &amp; connect</button>
+        </div>
+      </div>
+
+      <div id="panelOAuth" style="display:none;">
+        <div class="row">
+          <div class="field">
+            <label class="field-label" for="keycloakUrl">Keycloak URL</label>
+            <input type="text" id="keycloakUrl" placeholder="https://sso.cerberus-testing.com">
+          </div>
+          <div class="field">
+            <label class="field-label" for="realm">Realm</label>
+            <input type="text" id="realm" placeholder="cerberus">
+          </div>
+          <div class="field">
+            <label class="field-label" for="clientId">Client ID</label>
+            <input type="text" id="clientId" placeholder="cerberus-local-runner">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Redirect URI to register on this Keycloak client</label>
+          <div class="copy-field">
+            <code id="redirectUri">—</code>
+            <button type="button" class="secondary small-btn" onclick="copyRedirectUri()">Copy</button>
+          </div>
+          <div class="hint">Public client (no client secret), Standard Flow enabled, PKCE method S256, with this exact redirect URI.</div>
+        </div>
+        <div class="actions" style="margin:0;">
+          <button class="primary" onclick="startOAuth()">Sign in with Cerberus</button>
+        </div>
+      </div>
+
+      <div id="authStatus" class="connection-status">
+        <span id="authStatusText">Not connected</span>
+        <button class="secondary small-btn" id="authLogout" onclick="logoutAuth()" style="display:none;">Disconnect</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="runnerView" style="display:none;">
+    <div class="connection-bar">
+      <span>Connected to <b id="connectedUrl">—</b><span id="connectedLogin"></span></span>
+      <button type="button" class="link-btn" onclick="switchAccount()">Switch Cerberus / disconnect</button>
+    </div>
+    <section class="card robot-card">
+      <div class="label" style="margin-bottom:14px;">Robot template</div>
+      <div class="field">
+        <label class="field-label">Robot</label>
+        <div class="combobox" id="robotCombo">
+          <button type="button" class="combobox-btn" id="robotComboBtn" onclick="toggleCombo('robotCombo')">
+            <span class="combobox-label" id="robotComboLabel">Select a robot…</span>
+            <svg class="combobox-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="combobox-panel" id="robotComboPanel">
+            <div class="combobox-search-wrap">
+              <input type="text" class="combobox-search" id="robotComboSearch" placeholder="Search…" oninput="filterCombo('robotCombo', this.value)">
+            </div>
+            <div class="combobox-list" id="robotComboList"></div>
+          </div>
+        </div>
+      </div>
+      <div class="hint" id="robotLoadStatus"></div>
+
+      <div id="robotConfigPanel" class="robot-config" style="display:none;">
+        <div class="robot-config-grid">
+          <div><div class="cfg-label">Type</div><div class="cfg-value" id="robotCfgType">—</div></div>
+          <div><div class="cfg-label">Platform</div><div class="cfg-value" id="robotCfgPlatform">—</div></div>
+          <div><div class="cfg-label">Browser</div><div class="cfg-value" id="robotCfgBrowser">—</div></div>
+          <div><div class="cfg-label">Version</div><div class="cfg-value" id="robotCfgVersion">—</div></div>
+          <div><div class="cfg-label">Screen size</div><div class="cfg-value" id="robotCfgScreenSize">—</div></div>
+          <div><div class="cfg-label">Proxy type</div><div class="cfg-value" id="robotCfgProxyType">—</div></div>
+        </div>
+        <div class="hint" id="robotCfgDescription"></div>
+        <div class="cfg-label" style="margin:10px 0 6px;">Capabilities</div>
+        <div id="robotCfgCapabilities" class="capabilities-list"></div>
+      </div>
+
+      <div class="hint" id="robotSelection" style="margin-top:8px;">No robot selected: nothing will be created on Cerberus when starting.</div>
+      <div class="actions">
+        <button id="start" class="primary" onclick="action('start')"><span id="startLabel">Start local runner</span></button>
+        <button id="stop" class="secondary" onclick="action('stop')">Stop</button>
+      </div>
+    </section>
+
+    <section class="card services-card">
+      <div class="label" style="margin-bottom:14px;">Services</div>
+      <div class="service-table">
+        <div class="service-head">Service</div>
+        <div class="service-head">Local</div>
+        <div class="service-head">PID</div>
+        <div class="service-head">Tunnel</div>
+
+        <div class="service-row">
+          <div class="service-name">Selenium <span class="svc-check" id="svcSeleniumCheck"></span></div>
+          <div class="service-value" id="svcSeleniumLocal">—</div>
+          <div class="service-value" id="svcSeleniumPid">—</div>
+          <div class="service-value" id="svcSeleniumTunnel">—</div>
+        </div>
+
+        <div class="service-row">
+          <div class="service-name">Extension <span class="svc-check" id="svcExtensionCheck"></span></div>
+          <div class="service-value" id="svcExtensionLocal">—</div>
+          <div class="service-value" id="svcExtensionPid">—</div>
+          <div class="service-value" id="svcExtensionTunnel">—</div>
+        </div>
+
+        <div class="service-row" id="svcProxyRow" style="display:none;">
+          <div class="service-name">Robot Proxy <span class="svc-check" id="svcProxyCheck"></span></div>
+          <div class="service-value" id="svcProxyLocal">—</div>
+          <div class="service-value" id="svcProxyPid">—</div>
+          <div class="service-value" id="svcProxyTunnel">—</div>
+        </div>
+      </div>
+    </section>
+    <div id="error" class="error"></div>
+    <section class="card logs">
+      <div class="label">Component logs</div>
+      <div class="mode-tabs log-tabs">
+        <button type="button" class="mode-tab active" data-tab="all" onclick="setLogTab('all')">All</button>
+        <button type="button" class="mode-tab" data-tab="selenium" onclick="setLogTab('selenium')">Selenium</button>
+        <button type="button" class="mode-tab" data-tab="proxy" onclick="setLogTab('proxy')">Proxy</button>
+        <button type="button" class="mode-tab" data-tab="extension" onclick="setLogTab('extension')">Extension</button>
+      </div>
+      <pre id="logs">Waiting for logs…</pre>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+
+const THEME_KEY = 'crb-theme';
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+function effectiveTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  return (saved === 'light' || saved === 'dark') ? saved : (prefersDark.matches ? 'dark' : 'light');
+}
+function applyTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+  else document.documentElement.removeAttribute('data-theme');
+  const dark = effectiveTheme() === 'dark';
+  $('themeToggle').textContent = dark ? '☀️' : '🌙';
+  $('themeToggle').title = dark ? 'Switch to light theme' : 'Switch to dark theme';
+}
+function toggleTheme() { localStorage.setItem(THEME_KEY, effectiveTheme() === 'dark' ? 'light' : 'dark'); applyTheme(); }
+prefersDark.addEventListener('change', () => { if (!localStorage.getItem(THEME_KEY)) applyTheme(); });
+applyTheme();
+
+let oauthPoll = null;
+let runnerStarted = false;
+
+function showGate() {
+  $('gateView').style.display = 'flex';
+  $('runnerView').style.display = 'none';
+  $('state').style.display = 'none';
+  $('appSubtitle').textContent = 'Local Selenium execution bridge';
+}
+
+function showRunner(status) {
+  $('gateView').style.display = 'none';
+  $('runnerView').style.display = 'block';
+  $('state').style.display = 'inline-block';
+  $('appSubtitle').textContent = 'Local Selenium execution bridge';
+  $('connectedUrl').textContent = status.cerberusUrl;
+  $('connectedLogin').textContent = status.login ? (' as ' + status.login + ' · ' + status.mode) : (' · ' + status.mode);
+  if (oauthPoll) { clearInterval(oauthPoll); oauthPoll = null; }
+  if (!runnerStarted) { runnerStarted = true; loadRobotsList(); refresh(); setInterval(refresh, 1000); }
+}
+
+function selectAuthMode(mode) {
+  $('tabApiKey').classList.toggle('active', mode === 'apikey');
+  $('tabOAuth').classList.toggle('active', mode === 'oauth');
+  $('panelApiKey').style.display = mode === 'apikey' ? 'block' : 'none';
+  $('panelOAuth').style.display = mode === 'oauth' ? 'block' : 'none';
+}
+
+function setAuthStatus(kind, text, authenticated) {
+  const el = $('authStatus');
+  el.className = 'connection-status' + (kind === true ? ' ok' : kind === false ? ' fail' : '');
+  $('authStatusText').textContent = text;
+  $('authLogout').style.display = authenticated ? 'inline-block' : 'none';
+}
+
+async function loadAuthStatus() {
+  try {
+    const status = await fetch('/api/auth/status').then(r => r.json());
+    if (!$('cerberusUrl').value) $('cerberusUrl').value = status.cerberusUrl || '';
+    if (!$('apiKeyLogin').value) $('apiKeyLogin').value = status.login || '';
+    if (!$('keycloakUrl').value) $('keycloakUrl').value = status.keycloakUrl || '';
+    if (!$('realm').value) $('realm').value = status.realm || '';
+    if (!$('clientId').value) $('clientId').value = status.clientId || 'cerberus-local-runner';
+    $('redirectUri').textContent = status.redirectUri || '—';
+    selectAuthMode(status.mode === 'oauth' ? 'oauth' : 'apikey');
+    if (status.authenticated) {
+      showRunner(status);
+    } else if (!runnerStarted) {
+      showGate();
+    }
+    return status;
+  } catch (e) {
+    return null; // server not reachable yet
+  }
+}
+
+async function saveApiKey() {
+  setAuthStatus(null, 'Testing…', false);
+  const body = JSON.stringify({cerberusUrl: $('cerberusUrl').value, apiKey: $('apiKey').value, login: $('apiKeyLogin').value});
+  const result = await fetch('/api/auth/apikey', {method:'POST', headers:{'Content-Type':'application/json'}, body}).then(r => r.json());
+  const kind = result.status === 'ok' ? true : result.status === 'failed' ? false : null;
+  const authenticated = result.status !== 'failed';
+  setAuthStatus(kind, result.message, authenticated);
+  if (authenticated) { $('apiKey').value = ''; await loadAuthStatus(); }
+}
+
+async function startOAuth() {
+  // Opened synchronously in the click handler so browsers don't treat it as a blocked popup
+  // once the URL is only known after the fetch below resolves.
+  const popup = window.open('', '_blank');
+  const body = JSON.stringify({
+    cerberusUrl: $('cerberusUrl').value,
+    keycloakUrl: $('keycloakUrl').value,
+    realm: $('realm').value,
+    clientId: $('clientId').value
+  });
+  const result = await fetch('/api/auth/oauth/start', {method:'POST', headers:{'Content-Type':'application/json'}, body}).then(r => r.json());
+  if (result.error) { if (popup) popup.close(); setAuthStatus(false, result.error, false); return; }
+  $('redirectUri').textContent = (await fetch('/api/auth/status').then(r => r.json())).redirectUri;
+  if (popup) popup.location.href = result.authorizeUrl; else window.open(result.authorizeUrl, '_blank');
+  setAuthStatus(null, 'Waiting for sign-in in the browser tab that just opened…', false);
+  if (oauthPoll) clearInterval(oauthPoll);
+  let attempts = 0;
+  oauthPoll = setInterval(async () => {
+    attempts++;
+    await loadAuthStatus();
+    if (attempts > 150 && oauthPoll) { clearInterval(oauthPoll); oauthPoll = null; }
+  }, 2000);
+}
+
+async function copyRedirectUri() {
+  try { await navigator.clipboard.writeText($('redirectUri').textContent); } catch (e) { /* clipboard unavailable */ }
+}
+
+async function logoutAuth() {
+  await fetch('/api/auth/logout', {method:'POST'});
+  setAuthStatus(null, 'Not connected', false);
+}
+
+async function switchAccount() {
+  await fetch('/api/auth/logout', {method:'POST'});
+  setAuthStatus(null, 'Not connected', false);
+  showGate();
+}
+
+loadAuthStatus();
+
+function escapeHtml(value) {
+  return (value == null ? '' : String(value)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+let selectedRobotName = '';
+let robotLoadedName = '';
+let robotLoadedData = null;
+
+function updateRobotSelectionHint() {
+  $('robotSelection').textContent = selectedRobotName
+    ? `Will clone "${selectedRobotName}" into a local-runner-<you> robot on Cerberus when started`
+    : "No robot selected: nothing will be created on Cerberus when starting.";
+}
+
+// ---- Combobox: a small vanilla-JS take on Cerberus's own single-select dropdown
+// (include/templates/selectDropdown.html) — a bordered button + chevron opening a
+// floating panel with a search box and a checkmarked list, without pulling in Alpine.js
+// for this one static page.
+const combos = { robotCombo: {items: [], search: ''} };
+
+function closeCombos() {
+  document.querySelectorAll('.combobox.open').forEach(el => el.classList.remove('open'));
+}
+document.addEventListener('click', e => { if (!e.target.closest('.combobox')) closeCombos(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCombos(); });
+
+function toggleCombo(id) {
+  const el = $(id);
+  const wasOpen = el.classList.contains('open');
+  closeCombos();
+  if (wasOpen || el.querySelector('.combobox-btn').disabled) return;
+  el.classList.add('open');
+  combos[id].search = '';
+  $(id + 'Search').value = '';
+  renderCombo(id);
+  $(id + 'Search').focus();
+}
+
+function filterCombo(id, value) {
+  combos[id].search = value;
+  renderCombo(id);
+}
+
+/** items: [{value, label}]; selectedValue (optional) marks the initially-selected entry. */
+function setComboItems(id, items, selectedValue, placeholder) {
+  combos[id].items = items.map(item => ({...item, selected: selectedValue !== undefined && item.value === selectedValue}));
+  const selectedItem = combos[id].items.find(item => item.selected);
+  $(id + 'Label').textContent = selectedItem ? selectedItem.label : placeholder;
+  renderCombo(id);
+}
+
+function renderCombo(id) {
+  const state = combos[id];
+  const query = state.search.trim().toLowerCase();
+  const filtered = query ? state.items.filter(item => item.label.toLowerCase().includes(query)) : state.items;
+  const list = $(id + 'List');
+  list.innerHTML = '';
+  if (!filtered.length) {
+    const empty = document.createElement('div');
+    empty.className = 'combobox-empty';
+    empty.textContent = 'No results';
+    list.appendChild(empty);
+    return;
+  }
+  filtered.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'combobox-item' + (item.selected ? ' selected' : '');
+    btn.innerHTML = '<svg class="combobox-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+      + '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span></span>';
+    btn.querySelector('span').textContent = item.label;
+    btn.onclick = () => selectComboItem(id, item.value);
+    list.appendChild(btn);
+  });
+}
+
+/** Marks an already-loaded combo item as selected without a network round-trip
+ *  (used to restore a persisted selection once the list has already loaded). */
+function markComboSelected(id, value) {
+  combos[id].items = combos[id].items.map(item => ({...item, selected: item.value === value}));
+  const item = combos[id].items.find(i => i.selected);
+  $(id + 'Label').textContent = item ? item.label : value;
+  renderCombo(id);
+}
+
+function selectComboItem(id, value) {
+  combos[id].items = combos[id].items.map(item => ({...item, selected: item.value === value}));
+  const selectedItem = combos[id].items.find(item => item.selected);
+  $(id + 'Label').textContent = selectedItem ? selectedItem.label : '';
+  closeCombos();
+  if (id === 'robotCombo') selectRobot(value);
+}
+
+// ---- Robot template data -----------------------------------------------------------
+
+async function loadRobotsList(selected) {
+  try {
+    $('robotLoadStatus').textContent = '';
+    const response = await fetch('/api/robots');
+    const data = await response.json();
+    if (!response.ok) {
+      $('robotLoadStatus').textContent = data.message || data.error || ('HTTP ' + response.status);
+      return;
+    }
+    const items = (data.data || []).filter(r => r.robot).map(r => ({value: r.robot, label: r.robot}));
+    setComboItems('robotCombo', items, selected, 'Select a robot…');
+  } catch (e) {
+    $('robotLoadStatus').textContent = 'Failed to reach Cerberus for the robot list';
+  }
+}
+
+function renderCapabilities(capabilities) {
+  const box = $('robotCfgCapabilities');
+  box.innerHTML = '';
+  if (!capabilities || !capabilities.length) {
+    const empty = document.createElement('span');
+    empty.className = 'hint';
+    empty.textContent = 'No capabilities';
+    box.appendChild(empty);
+    return;
+  }
+  capabilities.forEach(cap => {
+    const chip = document.createElement('span');
+    chip.className = 'capability-chip';
+    chip.innerHTML = '<b></b><span></span>';
+    chip.querySelector('b').textContent = cap.capability + ':';
+    chip.querySelector('span').textContent = cap.value;
+    box.appendChild(chip);
+  });
+}
+
+/** The template's proxy type lives on its executor(s), not the robot itself - pick the first
+ *  one that actually asks for a proxy, otherwise NONE. */
+function detectProxyType(robot) {
+  const executors = (robot && robot.executors) || [];
+  const withProxy = executors.find(ex => ex.executorProxyType && ex.executorProxyType !== 'NONE');
+  return (withProxy && withProxy.executorProxyType) || (executors[0] && executors[0].executorProxyType) || 'NONE';
+}
+
+async function loadRobotByName(name) {
+  $('robotLoadStatus').innerHTML = '<span class="spinner spinner-muted"></span>Loading…';
+  $('robotConfigPanel').style.display = 'none';
+  try {
+    const response = await fetch('/api/robots/' + encodeURIComponent(name));
+    const data = await response.json();
+    if (!response.ok) {
+      $('robotLoadStatus').textContent = data.message || data.error || ('HTTP ' + response.status);
+      robotLoadedData = null;
+      return;
+    }
+    // Cerberus wraps successful payloads as {data: {...}}; a robot that doesn't exist still
+    // answers HTTP 200 but with no "data" field at all.
+    const robot = data.data;
+    if (!robot) {
+      $('robotLoadStatus').textContent = `Robot "${name}" not found`;
+      robotLoadedData = null;
+      return;
+    }
+    robotLoadedName = name;
+    robotLoadedData = robot;
+    $('robotLoadStatus').textContent = '';
+    $('robotCfgType').textContent = robot.type || '—';
+    $('robotCfgPlatform').textContent = robot.platform || '—';
+    $('robotCfgBrowser').textContent = robot.browser || '—';
+    $('robotCfgVersion').textContent = robot.version || '—';
+    $('robotCfgScreenSize').textContent = robot.screenSize || '—';
+    const proxyType = detectProxyType(robot);
+    $('robotCfgProxyType').textContent = proxyType;
+    $('robotCfgDescription').textContent = robot.description || '';
+    renderCapabilities(robot.capabilities);
+    $('robotConfigPanel').style.display = 'block';
+
+    // No manual toggle anymore: the Robot Proxy starts automatically whenever the template's
+    // own executor already asks for one.
+    await fetch('/api/robotproxy/enable', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: proxyType !== 'NONE' ? 'true' : 'false'})
+    });
+  } catch (e) {
+    $('robotLoadStatus').textContent = 'Failed to reach Cerberus';
+  }
+}
+
+async function selectRobot(name) {
+  await loadRobotByName(name);
+  await fetch('/api/robots/select', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({robot: name})
+  });
+  selectedRobotName = name;
+  updateRobotSelectionHint();
+}
+
+// ---- Log tabs: All / Selenium / Proxy / Extension --------------------------------
+// The extension shares Selenium's own stdout, but tags every line it emits with the fixed
+// "[crb-ext]" marker (see cerberus-robot-extension's log4j2.xml pattern), so that's what
+// separates it from Selenium's own log lines rather than the process source.
+let activeLogTab = 'all';
+let lastLogs = [];
+
+function classifyLogLine(line) {
+  if (line.includes('[crb-ext]')) return 'extension';
+  const match = line.match(/\[([\w-]+)\]/);
+  const source = match ? match[1] : '';
+  if (source === 'selenium') return 'selenium';
+  if (source === 'extension') return 'extension';
+  if (source === 'robotproxy' || source === 'cloudflared-proxy') return 'proxy';
+  return 'other';
+}
+
+function setLogTab(tab) {
+  activeLogTab = tab;
+  document.querySelectorAll('.log-tabs .mode-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderLogs(lastLogs);
+}
+
+function renderLogs(logs) {
+  lastLogs = logs;
+  const filtered = activeLogTab === 'all' ? logs : logs.filter(line => classifyLogLine(line) === activeLogTab);
+  const box = $('logs'), bottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.textContent = filtered.join('\n') || 'No logs yet';
+  if (bottom) box.scrollTop = box.scrollHeight;
+}
+
+// ---- Sync the selected template robot to Cerberus once the runner is READY ---------
+// Cerberus's real endpoints (confirmed against RobotController.java): DELETE /public/robots/{robot},
+// and POST /public/robots creating the robot + its capabilities + its executors in one call (both
+// proxied as-is by our own backend at /api/robots and /api/robots/{name}).
+let robotSyncApplied = false;
+
+function toHttpScheme(url) {
+  if (!url) return '';
+  return url.startsWith('http://') || url.startsWith('https://') ? url.replace(/^https:\/\//, 'http://') : 'http://' + url;
+}
+
+async function syncRobotOnCerberus(status) {
+  if (!robotLoadedData) return;
+  robotSyncApplied = true; // set before the awaits below so a fast next poll can't re-enter
+  try {
+    const authStatus = await fetch('/api/auth/status').then(r => r.json());
+    const login = authStatus.login;
+    if (!login) {
+      $('robotSelection').textContent = 'No Cerberus login on file - nothing created on Cerberus';
+      return;
+    }
+    const targetName = 'local-runner-' + login;
+
+    await fetch('/api/robots/' + encodeURIComponent(targetName), {method: 'DELETE'}).catch(() => {});
+
+    const template = robotLoadedData;
+    const templateExecutors = template.executors || [];
+    const templateExecutor = templateExecutors.find(ex => ex.executorProxyType && ex.executorProxyType !== 'NONE')
+      || templateExecutors[0] || {};
+
+    const executor = {executor: 'MAIN', isActive: true, rank: 1, host: toHttpScheme(status.tunnelUrl), port: '80'};
+    if (status.extensionTunnelUrl) {
+      executor.executorExtensionHost = toHttpScheme(status.extensionTunnelUrl);
+      executor.executorExtensionPort = '80';
+    }
+    if (templateExecutor.browserProxyHost) executor.browserProxyHost = templateExecutor.browserProxyHost;
+    if (templateExecutor.browserProxyPort) executor.browserProxyPort = templateExecutor.browserProxyPort;
+    if (status.robotproxyEnabled && status.proxyTunnelUrl) {
+      executor.executorProxyServiceHost = status.proxyTunnelUrl.replace(/^https?:\/\//, '');
+      executor.executorProxyServicePort = '80';
+      executor.executorProxyType = 'MITMPROXY';
+    }
+    const body = {
+      robot: targetName,
+      type: template.type, platform: template.platform, browser: template.browser, version: template.version,
+      isActive: true, userAgent: template.userAgent, screenSize: template.screenSize,
+      profileFolder: template.profileFolder, extraParam: template.extraParam,
+      acceptNotifications: template.acceptNotifications, isAcceptInsecureCerts: template.isAcceptInsecureCerts,
+      robotDecli: template.robotDecli, lbexemethod: template.lbexemethod,
+      description: `Cloned from ${template.robot} by Cerberus Local Runner`,
+      capabilities: (template.capabilities || []).map(c => ({capability: c.capability, value: c.value})),
+      executors: [executor]
+    };
+
+    const response = await fetch('/api/robots', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await response.json();
+    $('robotSelection').textContent = response.ok
+      ? `Created ${targetName}/MAIN on Cerberus, pointed at this runner`
+      : `Failed to create ${targetName}: ${data.message || data.error || ('HTTP ' + response.status)}`;
+  } catch (e) {
+    $('robotSelection').textContent = 'Failed to sync the robot with Cerberus';
+  }
+}
+
+async function action(name) {
+  if (name === 'start') robotSyncApplied = false;
+  await fetch('/api/' + name, {method:'POST'}); await refresh();
+}
+function setServiceCheck(id, ok) {
+  const el = $(id);
+  el.textContent = '✓';
+  el.classList.toggle('show', ok);
+  el.title = ok ? 'Running' : '';
+}
+
+async function refresh() {
+  try {
+    const [status, logs] = await Promise.all([fetch('/api/status').then(r=>r.json()), fetch('/api/logs').then(r=>r.json())]);
+    $('state').textContent=status.state; $('state').className='badge '+status.state;
+    $('state').title = 'Runner ID: ' + status.runnerId;
+    $('svcSeleniumLocal').textContent = status.seleniumUrl || '—';
+    $('svcSeleniumPid').textContent = status.seleniumPid || '—';
+    $('svcSeleniumTunnel').textContent = status.tunnelUrl || 'Not connected';
+    $('svcExtensionLocal').textContent = status.extensionUrl || '—';
+    $('svcExtensionPid').textContent = status.extensionPid || '—';
+    $('svcExtensionTunnel').textContent = status.extensionTunnelUrl || 'Not connected';
+    $('svcProxyRow').style.display = status.robotproxyEnabled ? 'contents' : 'none';
+    $('svcProxyLocal').textContent = status.robotproxyUrl || '—';
+    $('svcProxyPid').textContent = status.robotproxyPid || '—';
+    $('svcProxyTunnel').textContent = status.proxyTunnelUrl || 'Not connected';
+    setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl);
+    setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl);
+    setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl);
+
+    const starting = status.state === 'STARTING';
+    $('start').disabled=['STARTING','READY','STOPPING'].includes(status.state);
+    $('stop').disabled=['STOPPED','STOPPING'].includes(status.state);
+    $('startLabel').innerHTML = starting ? '<span class="spinner"></span>Starting…' : 'Start local runner';
+    $('error').style.display=status.error?'block':'none'; $('error').textContent=status.error;
+    renderLogs(logs);
+    if (status.robotName !== selectedRobotName) {
+      selectedRobotName = status.robotName || '';
+      updateRobotSelectionHint();
+      if (selectedRobotName && robotLoadedName !== selectedRobotName) {
+        markComboSelected('robotCombo', selectedRobotName);
+        await loadRobotByName(selectedRobotName);
+      }
+    }
+    if (status.state === 'READY' && selectedRobotName && !robotSyncApplied) {
+      await syncRobotOnCerberus(status);
+    }
+  } catch(e) { $('state').textContent='DISCONNECTED'; }
+}
+</script>
+</body>
+</html>
+
