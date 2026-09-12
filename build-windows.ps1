@@ -1,20 +1,16 @@
 #!/usr/bin/env pwsh
 <#
-Usage: ./build-windows.ps1 <selenium-server.jar> <cerberus-extension.jar> <cloudflared.exe> [cerberus-robot-proxy.jar]
-The last one is optional - only needed for the Robot Proxy feature. mitmproxy itself is NOT bundled:
-install it separately (e.g. via the mitmproxy Windows installer) or point the app's mitmproxy.binary
-config at an absolute path to your own mitmdump.exe install.
+Usage: ./build-windows.ps1
+Downloads selenium-server.jar, cerberus-extension.jar and cloudflared.exe per dependencies.windows.txt.
+Set $env:CERBERUS_ROBOT_PROXY = "true" to also download cerberus-robot-proxy.jar and mitmdump.exe
+(bundled directly - no code-signing constraint here, unlike macOS).
 #>
-param(
-    [Parameter(Mandatory = $true)][string]$SeleniumJar,
-    [Parameter(Mandatory = $true)][string]$ExtensionJar,
-    [Parameter(Mandatory = $true)][string]$CloudflaredExe,
-    [string]$RobotProxyJar = ""
-)
 
 $ErrorActionPreference = "Stop"
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$depsFile = Join-Path $projectDir "dependencies.windows.txt"
+$includeRobotProxy = $env:CERBERUS_ROBOT_PROXY -eq "true"
 $buildDir = Join-Path $projectDir "build"
 $inputDir = Join-Path $buildDir "input"
 $classesDir = Join-Path $buildDir "classes"
@@ -26,13 +22,24 @@ foreach ($tool in "java", "javac", "jar", "jlink", "jpackage") {
         throw "$tool is required on PATH"
     }
 }
-foreach ($sourceFile in $SeleniumJar, $ExtensionJar, $CloudflaredExe) {
-    if (-not (Test-Path $sourceFile -PathType Leaf)) {
-        throw "Missing file: $sourceFile"
-    }
+
+# Looks up "<key>=<url>" in the given dependencies.<os>.txt manifest and returns the url.
+function Get-DependencyUrl {
+    param([string]$DepsFile, [string]$Key)
+
+    if (-not (Test-Path $DepsFile -PathType Leaf)) { throw "Missing dependency manifest: $DepsFile" }
+    $match = Get-Content $DepsFile | Where-Object { $_ -match "^\s*$Key\s*=" } | Select-Object -First 1
+    if (-not $match) { throw "Missing dependency '$Key' in $DepsFile" }
+    return ($match -split "=", 2)[1]
 }
-if ($RobotProxyJar -ne "" -and -not (Test-Path $RobotProxyJar -PathType Leaf)) {
-    throw "Missing file: $RobotProxyJar"
+
+# Downloads the given manifest's <Key> into $InputDir/<Dest>.
+function Fetch-Dependency {
+    param([string]$DepsFile, [string]$InputDir, [string]$Key, [string]$Dest)
+
+    $url = Get-DependencyUrl -DepsFile $DepsFile -Key $Key
+    Write-Output "Fetching $Dest <- $url"
+    Invoke-WebRequest -Uri $url -OutFile (Join-Path $InputDir $Dest)
 }
 
 # See build-macos.sh for why this must be a JDK 21+ jlink/jpackage: the bundled runtime
@@ -59,11 +66,14 @@ Copy-Item -Path (Join-Path $projectDir "src\main\resources\*") -Destination $cla
 & jar --create --file (Join-Path $inputDir "cerberus-local-runner.jar") --main-class org.cerberus.runner.Main -C $classesDir .
 if ($LASTEXITCODE -ne 0) { throw "jar failed" }
 
-Copy-Item $SeleniumJar (Join-Path $inputDir "selenium-server.jar") -Force
-Copy-Item $ExtensionJar (Join-Path $inputDir "cerberus-extension.jar") -Force
-Copy-Item $CloudflaredExe (Join-Path $inputDir "cloudflared.exe") -Force
-if ($RobotProxyJar -ne "") {
-    Copy-Item $RobotProxyJar (Join-Path $inputDir "cerberus-robot-proxy.jar") -Force
+Fetch-Dependency -DepsFile $depsFile -InputDir $inputDir -Key "seleniumServer" -Dest "selenium-server.jar"
+Fetch-Dependency -DepsFile $depsFile -InputDir $inputDir -Key "cerberusExtension" -Dest "cerberus-extension.jar"
+Fetch-Dependency -DepsFile $depsFile -InputDir $inputDir -Key "cloudflared" -Dest "cloudflared.exe"
+
+if ($includeRobotProxy) {
+    Fetch-Dependency -DepsFile $depsFile -InputDir $inputDir -Key "cerberusRobotProxy" -Dest "cerberus-robot-proxy.jar"
+    # No macOS-style code-signing constraint here, so mitmdump is bundled directly next to the other jars.
+    Fetch-Dependency -DepsFile $depsFile -InputDir $inputDir -Key "mitmdump" -Dest "mitmdump.exe"
 }
 
 & jlink --add-modules ALL-MODULE-PATH --strip-debug --no-header-files --no-man-pages --output (Join-Path $buildDir "runtime")
@@ -98,6 +108,6 @@ if ($LASTEXITCODE -ne 0) { throw "jpackage exe failed (requires WiX Toolset v3 o
 
 Write-Output "Created: $distDir\Cerberus Local Runner\"
 Write-Output "Created .exe installer in: $distDir"
-if ($RobotProxyJar -ne "") {
-    Write-Output "Robot Proxy jar bundled - set mitmproxy.binary (in the app's config) to your mitmdump.exe install (PATH or absolute path) before enabling it."
+if ($includeRobotProxy) {
+    Write-Output "Robot Proxy jar and mitmdump.exe bundled - nothing else to install."
 }

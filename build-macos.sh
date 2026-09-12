@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "Usage: $0 /path/to/selenium-server.jar /path/to/cerberus-extension.jar /path/to/cloudflared [/path/to/cerberus-robot-proxy.jar]" >&2
-  echo "The last one is optional - only needed for the Robot Proxy feature. mitmdump itself is NOT bundled:" >&2
+if [[ $# -gt 0 ]]; then
+  echo "Usage: $0" >&2
+  echo "Downloads selenium-server.jar, cerberus-extension.jar and cloudflared per dependencies.txt." >&2
+  echo "Set CERBERUS_ROBOT_PROXY=true to also download cerberus-robot-proxy.jar. mitmdump itself is NOT bundled:" >&2
   echo "jpackage ad-hoc re-signs every file it packages and fails on mitmproxy.app's own already-signed binaries" >&2
   echo "(and re-signing them ourselves first still gets killed by the kernel - hardened-runtime entitlements aren't" >&2
   echo "enough to make that safe). Install mitmproxy separately (e.g. 'brew install mitmproxy') or point the app's" >&2
@@ -12,22 +13,17 @@ if [[ $# -lt 3 || $# -gt 4 ]]; then
 fi
 
 project_dir="$(cd "$(dirname "$0")" && pwd)"
-selenium_source="$1"
-extension_source="$2"
-cloudflared_source="$3"
-robotproxy_source="${4:-}"
+source "$project_dir/build-lib.sh"
+deps_file="$project_dir/dependencies.mac.txt"
+include_robotproxy="${CERBERUS_ROBOT_PROXY:-false}"
 build_dir="$project_dir/build"
 input_dir="$build_dir/input"
 classes_dir="$build_dir/classes"
 dist_dir="$project_dir/dist"
 
-for required in java javac jar jlink jpackage; do
+for required in java javac jar jlink jpackage curl; do
   command -v "$required" >/dev/null || { echo "$required is required" >&2; exit 1; }
 done
-for source_file in "$selenium_source" "$extension_source" "$cloudflared_source"; do
-  [[ -f "$source_file" ]] || { echo "Missing file: $source_file" >&2; exit 1; }
-done
-[[ -z "$robotproxy_source" || -f "$robotproxy_source" ]] || { echo "Missing file: $robotproxy_source" >&2; exit 1; }
 
 # The bundled runtime image (jlink, below) is built from whichever JDK's tools are on PATH right
 # now, and that exact runtime is also what launches cerberus-extension.jar as a subprocess at
@@ -50,13 +46,13 @@ cp -R "$project_dir/src/main/resources/." "$classes_dir/"
 jar --create --file "$input_dir/cerberus-local-runner.jar" \
   --main-class org.cerberus.runner.Main \
   -C "$classes_dir" .
-cp "$selenium_source" "$input_dir/selenium-server.jar"
-cp "$extension_source" "$input_dir/cerberus-extension.jar"
-cp "$cloudflared_source" "$input_dir/cloudflared"
+fetch_dependency "$deps_file" "$input_dir" "seleniumServer" "selenium-server.jar"
+fetch_dependency "$deps_file" "$input_dir" "cerberusExtension" "cerberus-extension.jar"
+fetch_dependency "$deps_file" "$input_dir" "cloudflared" "cloudflared"
 chmod +x "$input_dir/cloudflared"
 
-if [[ -n "$robotproxy_source" ]]; then
-  cp "$robotproxy_source" "$input_dir/cerberus-robot-proxy.jar"
+if [[ "$include_robotproxy" == "true" ]]; then
+  fetch_dependency "$deps_file" "$input_dir" "cerberusRobotProxy" "cerberus-robot-proxy.jar"
 fi
 
 # Selenium and third-party extensions can use a broad range of JDK modules.
@@ -90,7 +86,7 @@ jpackage --type dmg "${jpackage_args[@]}"
 
 echo "Created: $dist_dir/Cerberus Local Runner.app"
 echo "Created DMG in: $dist_dir"
-if [[ -n "$robotproxy_source" ]]; then
+if [[ "$include_robotproxy" == "true" ]]; then
   echo "Robot Proxy jar bundled - set mitmproxy.binary (in the app's config) to an absolute path to your"
   echo "own mitmdump/mitmproxy.app install (or leave it as the 'mitmdump' default if it's on PATH) before enabling it."
 fi

@@ -47,7 +47,7 @@ final class RunnerConfig {
         result.setProperty("selenium.jar", "selenium-server.jar");
         result.setProperty("extension.jar", "cerberus-extension.jar");
         result.setProperty("extension.port", "6555");
-        result.setProperty("cloudflared.binary", "cloudflared");
+        result.setProperty("cloudflared.binary", isWindows() ? "cloudflared.exe" : "cloudflared");
         result.setProperty("cloudflared.mode", "quick");
         result.setProperty("cloudflared.token", "");
         result.setProperty("cloudflared.publicUrl", "");
@@ -62,7 +62,9 @@ final class RunnerConfig {
         // first still gets the binary killed by the kernel at launch). Leave this as "mitmdump" to
         // resolve it via PATH (e.g. "brew install mitmproxy"), or set an absolute path to your own
         // untouched mitmproxy.app's mitmdump if you'd rather not rely on PATH.
-        result.setProperty("mitmproxy.binary", "mitmdump");
+        // build-linux.sh and build-windows.ps1 don't have this signing constraint, so they bundle
+        // mitmdump right next to selenium-server.jar - hence the platform-specific filename here.
+        result.setProperty("mitmproxy.binary", isWindows() ? "mitmdump.exe" : "mitmdump");
         result.setProperty("cerberus.callbackUrl", "");
         result.setProperty("cerberus.callbackBearerToken", "");
         result.setProperty("runner.id", "");
@@ -83,6 +85,10 @@ final class RunnerConfig {
         result.setProperty("cerberus.auth.oauth.expiresAt", "0");
         result.setProperty("robot.name", "");
         return result;
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private static Path detectConfigDirectory() {

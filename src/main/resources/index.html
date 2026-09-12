@@ -412,6 +412,7 @@
           <div class="service-value" id="svcProxyTunnel">—</div>
         </div>
       </div>
+      <div class="hint" id="svcProxyMacHint" style="display:none;">On macOS, the Robot Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
     </section>
     <div id="error" class="error"></div>
     <section class="card logs">
@@ -867,6 +868,7 @@ async function refresh() {
     $('svcExtensionPid').textContent = status.extensionPid || '—';
     $('svcExtensionTunnel').textContent = status.extensionTunnelUrl || 'Not connected';
     $('svcProxyRow').style.display = status.robotproxyEnabled ? 'contents' : 'none';
+    $('svcProxyMacHint').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'block' : 'none';
     $('svcProxyLocal').textContent = status.robotproxyUrl || '—';
     $('svcProxyPid').textContent = status.robotproxyPid || '—';
     $('svcProxyTunnel').textContent = status.proxyTunnelUrl || 'Not connected';

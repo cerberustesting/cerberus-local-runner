@@ -1,32 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "Usage: $0 /path/to/selenium-server.jar /path/to/cerberus-extension.jar /path/to/cloudflared [/path/to/cerberus-robot-proxy.jar]" >&2
-  echo "The last one is optional - only needed for the Robot Proxy feature. mitmproxy itself is NOT bundled:" >&2
-  echo "install it separately (e.g. 'pip install mitmproxy' or your distro's package) or point the app's" >&2
-  echo "mitmproxy.binary config at an absolute path to your own mitmdump install." >&2
+if [[ $# -gt 0 ]]; then
+  echo "Usage: $0" >&2
+  echo "Downloads selenium-server.jar, cerberus-extension.jar and cloudflared per dependencies.linux.txt." >&2
+  echo "Set CERBERUS_ROBOT_PROXY=true to also download cerberus-robot-proxy.jar and mitmdump (bundled" >&2
+  echo "directly - no code-signing constraint here, unlike macOS)." >&2
   exit 2
 fi
 
 project_dir="$(cd "$(dirname "$0")" && pwd)"
-selenium_source="$1"
-extension_source="$2"
-cloudflared_source="$3"
-robotproxy_source="${4:-}"
+source "$project_dir/build-lib.sh"
+deps_file="$project_dir/dependencies.linux.txt"
+include_robotproxy="${CERBERUS_ROBOT_PROXY:-false}"
 build_dir="$project_dir/build"
 input_dir="$build_dir/input"
 classes_dir="$build_dir/classes"
 dist_dir="$project_dir/dist"
 icon_path="$project_dir/packaging/linux/cerberus.png"
 
-for required in java javac jar jlink jpackage; do
+for required in java javac jar jlink jpackage curl; do
   command -v "$required" >/dev/null || { echo "$required is required" >&2; exit 1; }
 done
-for source_file in "$selenium_source" "$extension_source" "$cloudflared_source"; do
-  [[ -f "$source_file" ]] || { echo "Missing file: $source_file" >&2; exit 1; }
-done
-[[ -z "$robotproxy_source" || -f "$robotproxy_source" ]] || { echo "Missing file: $robotproxy_source" >&2; exit 1; }
 
 # See build-macos.sh for why this must be a JDK 21+ jlink/jpackage: the bundled runtime
 # launches cerberus-extension.jar (compiled for Java 21) as a subprocess at startup.
@@ -46,13 +41,16 @@ cp -R "$project_dir/src/main/resources/." "$classes_dir/"
 jar --create --file "$input_dir/cerberus-local-runner.jar" \
   --main-class org.cerberus.runner.Main \
   -C "$classes_dir" .
-cp "$selenium_source" "$input_dir/selenium-server.jar"
-cp "$extension_source" "$input_dir/cerberus-extension.jar"
-cp "$cloudflared_source" "$input_dir/cloudflared"
+fetch_dependency "$deps_file" "$input_dir" "seleniumServer" "selenium-server.jar"
+fetch_dependency "$deps_file" "$input_dir" "cerberusExtension" "cerberus-extension.jar"
+fetch_dependency "$deps_file" "$input_dir" "cloudflared" "cloudflared"
 chmod +x "$input_dir/cloudflared"
 
-if [[ -n "$robotproxy_source" ]]; then
-  cp "$robotproxy_source" "$input_dir/cerberus-robot-proxy.jar"
+if [[ "$include_robotproxy" == "true" ]]; then
+  fetch_dependency "$deps_file" "$input_dir" "cerberusRobotProxy" "cerberus-robot-proxy.jar"
+  # No macOS-style code-signing constraint here, so mitmdump is bundled directly next to the other jars.
+  fetch_dependency "$deps_file" "$input_dir" "mitmdump" "mitmdump"
+  chmod +x "$input_dir/mitmdump"
 fi
 
 jlink --add-modules ALL-MODULE-PATH \
@@ -87,6 +85,6 @@ jpackage --type deb "${jpackage_args[@]}"
 
 echo "Created: $dist_dir/Cerberus Local Runner/"
 echo "Created .deb in: $dist_dir"
-if [[ -n "$robotproxy_source" ]]; then
-  echo "Robot Proxy jar bundled - set mitmproxy.binary (in the app's config) to your mitmdump install (PATH or absolute path) before enabling it."
+if [[ "$include_robotproxy" == "true" ]]; then
+  echo "Robot Proxy jar and mitmdump bundled - nothing else to install."
 fi

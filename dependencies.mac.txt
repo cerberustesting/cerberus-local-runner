@@ -1,0 +1,15 @@
+# Cerberus Local Runner - macOS dependency manifest.
+#
+# Format: <key>=<url>
+#   build-macos.sh looks up the keys it needs by name and saves the download under its own
+#   fixed destination filename (the name the app expects) - so the url side is free to point
+#   anywhere reachable with curl: this delivery server, an artifact registry, or a public
+#   release page, with whatever filename the source actually uses.
+#
+# cerberusRobotProxy is only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy feature).
+# mitmproxy is intentionally not bundled on macOS - see build-macos.sh and RunnerConfig.java.
+
+seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server.jar
+cerberusExtension=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-extension.jar
+cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy.jar
+cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/mac-arm64/cloudflared

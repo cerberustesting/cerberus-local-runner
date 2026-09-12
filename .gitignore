@@ -1,14 +1,17 @@
 /build/
 /dist/
+/dependencies/
 *.bak
 .DS_Store
 .idea/
 
 # Third-party build inputs (selenium/extension/robot-proxy jars, cloudflared, mitmproxy) -
-# fetch these from the artifact store / GitHub Releases, don't commit them here.
+# fetch these per dependencies.txt, don't commit them here.
 *.jar
 *.tar
 *.tar.gz
 mitmproxy.app/
 cloudflared
 cloudflared.exe
+mitmdump
+mitmdump.exe

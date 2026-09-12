@@ -1,0 +1,10 @@
+# Cerberus Local Runner - Windows dependency manifest. See dependencies.mac.txt for the format.
+#
+# cerberusRobotProxy and mitmdump are only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy
+# feature) - no macOS-style code-signing constraint here, so mitmdump is bundled directly.
+
+seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server.jar
+cerberusExtension=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-extension.jar
+cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy.jar
+cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/windows/cloudflared-windows.exe
+mitmdump=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/windows/mitmdump.exe

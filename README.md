@@ -1,6 +1,6 @@
-# Cerberus Local Runner — macOS prototype
+# Cerberus Local Runner
 
-This prototype packages a small Java supervisor as a native macOS application. It starts:
+This prototype packages a small Java supervisor as a native application (macOS, Linux, Windows). It starts:
 
 1. Selenium Server in standalone mode;
 2. the Cerberus Selenium extension through `--ext`;
@@ -10,27 +10,38 @@ It then displays the state and logs at `http://127.0.0.1:18080`. Docker and a sy
 
 ## Prerequisites for building
 
-- macOS with JDK 17 or newer (`java`, `javac`, `jar`, and `jpackage`);
-- a Selenium Server standalone JAR;
-- the Cerberus Selenium extension JAR;
-- a `cloudflared` macOS binary matching the Mac architecture.
+- JDK 21 or newer on `PATH` (`java`, `javac`, `jar`, `jlink`, and `jpackage`), plus `curl` (macOS/Linux) or PowerShell with internet access (Windows);
+- network access to whatever URLs `dependencies.txt` points at;
+- on Windows, the WiX Toolset v3 on `PATH` for the `.exe` installer.
 
-The application package must be built on macOS. Build once on Apple Silicon and once on Intel if both architectures are required.
+Each build script must run on its target OS - `jpackage` does not cross-compile. Build once per OS (and once per Mac architecture if both Apple Silicon and Intel are required).
+
+## Dependency manifest
+
+`dependencies.<os>.txt` (repo root - one file per OS: `dependencies.mac.txt`, `dependencies.linux.txt`, `dependencies.windows.txt`) declares every third-party binary that OS's build script fetches, one `<key>=<url>` line per dependency. Each build script only reads its own manifest and looks up the keys it needs (e.g. `seleniumServer`, `cloudflared`), saving the download under its own fixed destination filename - the one the app expects. Only the `url` side ever needs updating when a dependency's version or source changes, and it can point anywhere reachable with `curl`/`Invoke-WebRequest` (this delivery server, an artifact registry, or a public release page), whatever filename the source actually uses. See the comments at the top of `dependencies.mac.txt` for the full format.
+
+`cerberusRobotProxy`, `mitmdumpLinux` and `mitmdumpWindows` are only downloaded when `CERBERUS_ROBOT_PROXY=true` (Robot Proxy feature). On macOS, `mitmdump` is deliberately **not** bundled even then: `jpackage`'s ad-hoc re-signing pass breaks mitmproxy.app's own already-signed binaries (and re-signing it ourselves still gets it killed by the hardened runtime at launch). Run `brew install mitmproxy` on the Mac before enabling the Robot Proxy - the app's UI shows this reminder when the Robot Proxy is enabled on macOS.
 
 ## Build the application
 
 ```bash
+# macOS
 chmod +x build-macos.sh
-./build-macos.sh \
-  /path/to/selenium-server-4.44.0.jar \
-  /path/to/cerberus-extension.jar \
-  /path/to/cloudflared
+./build-macos.sh
+
+# Linux
+chmod +x build-linux.sh
+./build-linux.sh
+
+# Windows (PowerShell)
+./build-windows.ps1
 ```
 
 Outputs:
 
-- `dist/Cerberus Local Runner.app`
-- `dist/Cerberus Local Runner-0.1.0.dmg`
+- macOS: `dist/Cerberus Local Runner.app` and `dist/Cerberus Local Runner-1.0.1.dmg`
+- Linux: `dist/Cerberus Local Runner/` (app-image) and a `.deb` package
+- Windows: `dist/Cerberus Local Runner/` (app-image) and a `.exe` installer
 
 For an initial unsigned build, macOS Gatekeeper may require a right-click followed by **Open**. For wider distribution, sign and notarize the application. The build script supports `CERBERUS_MAC_SIGN_IDENTITY` when a Developer ID Application certificate is available.
 
