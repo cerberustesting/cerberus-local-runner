@@ -45,6 +45,10 @@ Outputs:
 
 For an initial unsigned build, macOS Gatekeeper may require a right-click followed by **Open**. For wider distribution, sign and notarize the application. The build script supports `CERBERUS_MAC_SIGN_IDENTITY` when a Developer ID Application certificate is available.
 
+## Releasing
+
+Pushing a tag matching `v*` (e.g. `v1.0.1`) triggers `.github/workflows/release.yml`, which builds all three platforms (with the Robot Proxy feature bundled) and uploads the resulting `.dmg`/`.deb`/`.exe` to a GitHub Release named after the tag. The macOS job runs on `macos-14` (Apple Silicon) - unsigned, since `CERBERUS_MAC_SIGN_IDENTITY` isn't configured in CI.
+
 ## Run in development mode
 
 The following command compiles and launches the application with simulated Selenium and Cloudflare processes:
