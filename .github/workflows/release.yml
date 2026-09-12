@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and upload to (created if it does not exist yet) - for manual testing'
+        required: true
 
 permissions:
   contents: write
@@ -14,11 +19,18 @@ env:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - name: Create GitHub Release
+      - id: tag
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub Release if it doesn't already exist
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --generate-notes
 
   build-macos:
     needs: create-release
@@ -36,7 +48,7 @@ jobs:
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.dmg --repo "${{ github.repository }}" --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.dmg --repo "${{ github.repository }}" --clobber
 
   build-linux:
     needs: create-release
@@ -54,7 +66,7 @@ jobs:
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.deb --repo "${{ github.repository }}" --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.deb --repo "${{ github.repository }}" --clobber
 
   build-windows:
     needs: create-release
@@ -71,4 +83,4 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.exe --repo "${{ github.repository }}" --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.exe --repo "${{ github.repository }}" --clobber
