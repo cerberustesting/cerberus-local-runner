@@ -84,8 +84,6 @@ $jpackageArgs = @(
     "--app-version", "1.0.1",
     "--vendor", "Cerberus Testing",
     "--description", "Runs Cerberus Selenium tests on this machine",
-    "--win-shortcut",
-    "--win-menu",
     "--input", $inputDir,
     "--main-jar", "cerberus-local-runner.jar",
     "--main-class", "org.cerberus.runner.Main",
@@ -103,7 +101,9 @@ if (Test-Path $iconPath) {
 & jpackage --type app-image @jpackageArgs
 if ($LASTEXITCODE -ne 0) { throw "jpackage app-image failed" }
 
-& jpackage --type exe @jpackageArgs
+# --win-shortcut and --win-menu only apply to the installer type (exe/msi), not app-image.
+$exeOnlyArgs = @("--win-shortcut", "--win-menu")
+& jpackage --type exe @jpackageArgs @exeOnlyArgs
 if ($LASTEXITCODE -ne 0) { throw "jpackage exe failed (requires WiX Toolset v3 on PATH)" }
 
 Write-Output "Created: $distDir\Cerberus Local Runner\"

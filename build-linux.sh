@@ -64,8 +64,6 @@ jpackage_args=(
   --app-version "1.0.1"
   --vendor "Cerberus Testing"
   --description "Runs Cerberus Selenium tests on this machine"
-  --linux-package-name "cerberus-local-runner"
-  --linux-shortcut
   --input "$input_dir"
   --main-jar "cerberus-local-runner.jar"
   --main-class "org.cerberus.runner.Main"
@@ -80,8 +78,12 @@ else
   echo "No icon found at $icon_path - packaging without a custom icon." >&2
 fi
 
+# --linux-package-name and --linux-shortcut only apply to native package types (deb/rpm),
+# not app-image.
+deb_only_args=(--linux-package-name "cerberus-local-runner" --linux-shortcut)
+
 jpackage --type app-image "${jpackage_args[@]}"
-jpackage --type deb "${jpackage_args[@]}"
+jpackage --type deb "${jpackage_args[@]}" "${deb_only_args[@]}"
 
 echo "Created: $dist_dir/Cerberus Local Runner/"
 echo "Created .deb in: $dist_dir"
