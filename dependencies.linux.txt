@@ -3,8 +3,8 @@
 # cerberusRobotProxy and mitmdump are only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy
 # feature) - no macOS-style code-signing constraint here, so mitmdump is bundled directly.
 
-seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server.jar
-cerberusExtension=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-extension.jar
-cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy.jar
-cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/linux/cloudflared-linux
+seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server-4.44.0.jar
+cerberusExtension=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-extension-2.1-SNAPSHOT-full.jar
+cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy-1.8-SNAPSHOT.jar
+cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/linux/cloudflared-linux-amd64
 mitmdump=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/linux/mitmdump
