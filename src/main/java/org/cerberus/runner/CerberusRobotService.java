@@ -42,6 +42,18 @@ final class CerberusRobotService {
         config.save();
     }
 
+    /** Name used for this runner's own "local-runner-{name}" robot: the OAuth/API login by default,
+     *  overridable so e.g. two runners signed in as the same person can each get their own robot. */
+    String runnerName() {
+        String custom = config.get("robot.runnerName");
+        return custom.isBlank() ? config.get("cerberus.auth.login") : custom;
+    }
+
+    synchronized void setRunnerName(String runnerName) throws IOException {
+        config.set("robot.runnerName", runnerName == null ? "" : runnerName.trim());
+        config.save();
+    }
+
     RobotResult listRobots() throws IOException, InterruptedException {
         return get("/api/public/robots");
     }

@@ -29,10 +29,31 @@ done
 # now, and that exact runtime is also what launches cerberus-extension.jar as a subprocess at
 # startup - that jar is compiled for Java 21, so a 17-or-older jlink here would package a runtime
 # that can start our own app but throws UnsupportedClassVersionError launching the extension.
+java_major_of() { "$1/bin/java" -version 2>&1 | head -1 | grep -oE '"[0-9]+' | tr -d '"'; }
+
 java_major="$(java -version 2>&1 | head -1 | grep -oE '"[0-9]+' | tr -d '"')"
 if [[ -z "$java_major" || "$java_major" -lt 21 ]]; then
+  # Local dev convenience: auto-switch to a JDK 21 already installed on this Mac (Homebrew's
+  # keg-only openjdk@21, or whatever `java_home -v 21` reports) instead of just failing outright.
+  # CI doesn't need this - it already pins Temurin 21 via setup-java. Each candidate's *actual*
+  # version is checked before use: java_home has been observed to ignore -v entirely on some
+  # setups and just return its default JVM, so trusting it blindly could silently jlink the wrong JDK.
+  for candidate in \
+    "$(command -v brew >/dev/null 2>&1 && brew --prefix openjdk@21 2>/dev/null || true)/libexec/openjdk.jdk/Contents/Home" \
+    "$(/usr/libexec/java_home -v 21 2>/dev/null || true)"
+  do
+    [[ -n "$candidate" && -x "$candidate/bin/java" ]] || continue
+    if [[ "$(java_major_of "$candidate")" == "21" ]]; then
+      echo "java on PATH is version ${java_major:-unknown}; using JDK 21 found at $candidate instead." >&2
+      export PATH="$candidate/bin:$PATH"
+      java_major=21
+      break
+    fi
+  done
+fi
+if [[ -z "$java_major" || "$java_major" -lt 21 ]]; then
   echo "java on PATH is version ${java_major:-unknown}, but cerberus-extension.jar requires Java 21+." >&2
-  echo "Put a JDK 21+ first on PATH, e.g.: export PATH=\"\$(brew --prefix openjdk@21)/bin:\$PATH\"" >&2
+  echo "Install one, e.g.: brew install openjdk@21" >&2
   exit 1
 fi
 

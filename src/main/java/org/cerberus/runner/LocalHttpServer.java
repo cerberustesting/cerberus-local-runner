@@ -123,6 +123,7 @@ final class LocalHttpServer {
                 "\"mode\":\"" + json(str(status.get("mode"))) + "\"," +
                 "\"authenticated\":" + status.get("authenticated") + "," +
                 "\"login\":\"" + json(str(status.get("login"))) + "\"," +
+                "\"runnerName\":\"" + json(robots.runnerName()) + "\"," +
                 "\"keycloakUrl\":\"" + json(str(status.get("keycloakUrl"))) + "\"," +
                 "\"realm\":\"" + json(str(status.get("realm"))) + "\"," +
                 "\"clientId\":\"" + json(str(status.get("clientId"))) + "\"," +
@@ -138,9 +139,8 @@ final class LocalHttpServer {
         String body = readBody(exchange);
         String cerberusUrl = CerberusAuthService.jsonField(body, "cerberusUrl");
         String apiKey = CerberusAuthService.jsonField(body, "apiKey");
-        String login = CerberusAuthService.jsonField(body, "login");
         try {
-            send(exchange, 200, "application/json; charset=utf-8", resultJson(auth.saveApiKey(cerberusUrl, apiKey, login)));
+            send(exchange, 200, "application/json; charset=utf-8", resultJson(auth.saveApiKey(cerberusUrl, apiKey)));
         } catch (IOException exception) {
             send(exchange, 400, "application/json; charset=utf-8", resultJson(new CerberusAuthService.TestResult("failed", exception.getMessage())));
         }
@@ -153,11 +153,8 @@ final class LocalHttpServer {
         }
         String body = readBody(exchange);
         String cerberusUrl = CerberusAuthService.jsonField(body, "cerberusUrl");
-        String keycloakUrl = CerberusAuthService.jsonField(body, "keycloakUrl");
-        String realm = CerberusAuthService.jsonField(body, "realm");
-        String clientId = CerberusAuthService.jsonField(body, "clientId");
         try {
-            String authorizeUrl = auth.startOAuth(cerberusUrl, keycloakUrl, realm, clientId);
+            String authorizeUrl = auth.startOAuth(cerberusUrl);
             send(exchange, 200, "application/json; charset=utf-8", "{\"authorizeUrl\":\"" + json(authorizeUrl) + "\"}");
         } catch (IOException exception) {
             send(exchange, 400, "application/json; charset=utf-8", "{\"error\":\"" + json(exception.getMessage()) + "\"}");
@@ -187,7 +184,7 @@ final class LocalHttpServer {
         try {
             String login = auth.completeOAuth(query.get("code"), query.get("state"), query.get("error"), query.get("error_description"));
             html = callbackPage(true, "Signed in" + (login == null || login.isBlank() ? "" : " as " + escapeHtml(login))
-                    + ". You can close this tab and return to the Cerberus Local Runner.");
+                    + ". This tab will close automatically - if it doesn't, you can close it and return to the Cerberus Local Runner.");
         } catch (Exception exception) {
             html = callbackPage(false, escapeHtml(exception.getMessage()));
         }
@@ -203,6 +200,10 @@ final class LocalHttpServer {
             if ("POST".equalsIgnoreCase(exchange.getRequestMethod()) && "select".equals(remainder)) {
                 String body = readBody(exchange);
                 robots.select(CerberusAuthService.jsonField(body, "robot"));
+                send(exchange, 200, "application/json", "{\"ok\":true}");
+            } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod()) && "runnerName".equals(remainder)) {
+                String body = readBody(exchange);
+                robots.setRunnerName(CerberusAuthService.jsonField(body, "runnerName"));
                 send(exchange, 200, "application/json", "{\"ok\":true}");
             } else if ("POST".equalsIgnoreCase(exchange.getRequestMethod()) && remainder.isBlank()) {
                 // Forwarded byte-for-byte: the browser (real JSON) builds the robot+capabilities+executor payload.
@@ -247,12 +248,15 @@ final class LocalHttpServer {
 
     private String callbackPage(boolean success, String message) {
         String color = success ? "#10b981" : "#e63757";
+        // window.close() is a no-op in most browsers on a tab that wasn't opened via window.open(),
+        // so this is a best-effort convenience, not something the flow depends on.
+        String autoClose = success ? "<script>setTimeout(function(){window.close();},1200);</script>" : "";
         return "<!doctype html><html><head><meta charset=\"utf-8\"><title>Cerberus Local Runner</title>"
                 + "<style>body{font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#e2e8f0;"
                 + "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}"
                 + ".box{max-width:420px;padding:28px;border-radius:16px;background:#1e293b;border:1px solid #334155;text-align:center}"
                 + "h1{font-size:18px;margin:0 0 8px;color:" + color + "}p{color:#94a3b8;font-size:14px}</style></head>"
-                + "<body><div class=\"box\"><h1>" + (success ? "Connected" : "Sign-in failed") + "</h1><p>" + message + "</p></div></body></html>";
+                + "<body><div class=\"box\"><h1>" + (success ? "Connected" : "Sign-in failed") + "</h1><p>" + message + "</p></div></body>" + autoClose + "</html>";
     }
 
     private String escapeHtml(String value) {

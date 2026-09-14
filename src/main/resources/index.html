@@ -197,6 +197,20 @@
     .connection-status.ok { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); }
     .connection-status.fail { background:var(--crb-red-light-color); color:var(--crb-red-dark-color); }
 
+    .info-popover { position:relative; display:inline-flex; }
+    .info-btn {
+      display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:0;
+      border-radius:999px; background:var(--crb-grey-light-color); color:var(--crb-text-muted); flex-shrink:0;
+    }
+    .info-btn:hover { background:var(--crb-new-border); color:var(--crb-text); }
+    .info-btn svg { width:17px; height:17px; }
+    .info-popover-panel {
+      display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:40; width:320px; max-width:80vw;
+      background:var(--crb-new-bg); border:1px solid var(--crb-new-border); border-radius:10px;
+      box-shadow:0 10px 30px rgb(15 23 42 / 0.15); padding:14px;
+    }
+    .info-popover.open .info-popover-panel { display:block; }
+
     .gate-wrap { display:flex; justify-content:center; padding-top:24px; }
     .gate-wrap .card { width:min(520px, 100%); }
     .link-btn { background:transparent; padding:0; font-size:13px; font-weight:600; color:var(--crb-blue-color); }
@@ -209,13 +223,35 @@
     .connection-bar b { color:var(--crb-text); }
 
     .robot-card { margin-bottom:14px; }
-    .robot-config { margin:12px 0; padding:12px 14px; border-radius:10px; border:1px solid var(--crb-new-border); background:var(--crb-new-bg); }
-    .robot-config-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:10px; margin-bottom:10px; }
-    .cfg-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--crb-text-label); margin-bottom:2px; }
-    .cfg-value { font-size:13px; color:var(--crb-text); overflow-wrap:anywhere; }
-    .capabilities-list { display:flex; flex-wrap:wrap; gap:6px; }
-    .capability-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px; background:var(--crb-grey-light-color); font-size:12px; color:var(--crb-text); }
-    .capability-chip b { font-weight:600; }
+    .robot-row { display:flex; flex-direction:column; gap:10px; }
+    .robot-combo { width:100%; }
+    .combobox-btn.robot-combo-btn { height:auto; min-height:44px; padding:8px 12px; }
+    .combobox-label.robot-combo-label { display:flex; align-items:center; flex-wrap:wrap; gap:6px; overflow:visible; white-space:normal; text-overflow:clip; }
+    .robot-combo-name { display:flex; align-items:center; gap:6px; font-weight:600; color:var(--crb-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .robot-combo-icon { width:16px; height:16px; flex-shrink:0; color:var(--crb-text-muted); }
+    .robot-pill {
+      display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px;
+      border:1px solid var(--crb-new-border); background:var(--crb-grey-light-color);
+      font-size:11px; font-weight:600; color:var(--crb-text); flex-shrink:0;
+    }
+    .robot-pill-icon { width:12px; height:12px; }
+    .robot-pill--platform { background:var(--crb-blue-light-color); color:var(--crb-blue-dark-color); border-color:transparent; }
+    .robot-pill--screen { background:var(--crb-blue-light-color); color:var(--crb-blue-dark-color); border-color:transparent; }
+    .robot-pill--browser { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); border-color:transparent; }
+    .robot-pill--version { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); border-color:transparent; }
+    .robot-pill--type { background:var(--crb-orange-light-color); color:var(--crb-orange-dark-color); border-color:transparent; }
+    .robot-pill--caps { background:var(--crb-orange-light-color); color:var(--crb-orange-dark-color); border-color:transparent; }
+    .robot-pill--proxy { background:var(--crb-red-light-color); color:var(--crb-red-dark-color); border-color:transparent; }
+    .robot-row-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; flex-shrink:0; }
+    .runner-name-link {
+      display:inline-flex; align-items:center; gap:5px; background:transparent; padding:6px 6px;
+      font-size:13px; font-weight:600; color:var(--crb-blue-color);
+      text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;
+    }
+    .runner-name-link:hover { background:var(--crb-grey-light-color); }
+    .runner-name-link svg { width:13px; height:13px; opacity:0; transition:opacity .15s ease; }
+    .runner-name-link:hover svg { opacity:.7; }
+    .runner-name-input { height:32px; font-size:13px; width:170px; }
     .services-card { margin-bottom:14px; }
 
     .service-table { display:grid; grid-template-columns:110px 1fr 70px 1.4fr; gap:10px 16px; align-items:center; }
@@ -247,7 +283,7 @@
     .combobox-search { width:100%; height:32px; padding:0 10px; border-radius:6px; border:1px solid var(--crb-new-border); background:transparent; color:var(--crb-text); font:inherit; font-size:13px; }
     .combobox-list { max-height:220px; overflow:auto; padding:4px; }
     .combobox-item {
-      display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border-radius:6px;
+      display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; width:100%; padding:8px 10px; border-radius:6px;
       border:0; background:transparent; color:var(--crb-text); font:inherit; font-size:13px; text-align:left; cursor:pointer;
     }
     .combobox-item:hover { background:var(--crb-grey-light-color); }
@@ -293,46 +329,35 @@
           <label class="field-label" for="apiKey">API Key</label>
           <input type="password" id="apiKey" placeholder="From your Cerberus profile (User Manager)">
         </div>
-        <div class="field">
-          <label class="field-label" for="apiKeyLogin">Cerberus login</label>
-          <input type="text" id="apiKeyLogin" placeholder="e.g. bcivel">
-          <div class="hint">Cerberus doesn't expose a way to resolve this from the key alone - needed to name this runner's own "local-runner-&lt;login&gt;" robot.</div>
-        </div>
         <div class="actions" style="margin:0;">
           <button class="primary" onclick="saveApiKey()">Save &amp; connect</button>
         </div>
       </div>
 
       <div id="panelOAuth" style="display:none;">
-        <div class="row">
-          <div class="field">
-            <label class="field-label" for="keycloakUrl">Keycloak URL</label>
-            <input type="text" id="keycloakUrl" placeholder="https://sso.cerberus-testing.com">
-          </div>
-          <div class="field">
-            <label class="field-label" for="realm">Realm</label>
-            <input type="text" id="realm" placeholder="cerberus">
-          </div>
-          <div class="field">
-            <label class="field-label" for="clientId">Client ID</label>
-            <input type="text" id="clientId" placeholder="cerberus-local-runner">
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label">Redirect URI to register on this Keycloak client</label>
-          <div class="copy-field">
-            <code id="redirectUri">—</code>
-            <button type="button" class="secondary small-btn" onclick="copyRedirectUri()">Copy</button>
-          </div>
-          <div class="hint">Public client (no client secret), Standard Flow enabled, PKCE method S256, with this exact redirect URI.</div>
-        </div>
-        <div class="actions" style="margin:0;">
+        <div class="actions" style="margin:0; align-items:center;">
           <button class="primary" onclick="startOAuth()">Sign in with Cerberus</button>
+          <div class="info-popover" id="oauthInfoPopover">
+            <button type="button" class="info-btn" onclick="toggleInfoPopover('oauthInfoPopover')" title="Keycloak client details" aria-label="Keycloak client details">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+            <div class="info-popover-panel">
+              <div class="hint">Keycloak URL, realm and client ID are fetched automatically from the Cerberus URL above.</div>
+              <div class="field" style="margin-top:10px;">
+                <label class="field-label">Redirect URI to register on this Keycloak client</label>
+                <div class="copy-field">
+                  <code id="redirectUri">—</code>
+                  <button type="button" class="secondary small-btn" onclick="copyRedirectUri()">Copy</button>
+                </div>
+                <div class="hint">Public client (no client secret), Standard Flow enabled, PKCE method S256, with this exact redirect URI.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div id="authStatus" class="connection-status">
-        <span id="authStatusText">Not connected</span>
+      <div id="authStatus" class="connection-status" style="display:none;">
+        <span id="authStatusText"></span>
         <button class="secondary small-btn" id="authLogout" onclick="logoutAuth()" style="display:none;">Disconnect</button>
       </div>
     </section>
@@ -345,11 +370,10 @@
     </div>
     <section class="card robot-card">
       <div class="label" style="margin-bottom:14px;">Robot template</div>
-      <div class="field">
-        <label class="field-label">Robot</label>
-        <div class="combobox" id="robotCombo">
-          <button type="button" class="combobox-btn" id="robotComboBtn" onclick="toggleCombo('robotCombo')">
-            <span class="combobox-label" id="robotComboLabel">Select a robot…</span>
+      <div class="robot-row">
+        <div class="combobox robot-combo" id="robotCombo">
+          <button type="button" class="combobox-btn robot-combo-btn" id="robotComboBtn" onclick="toggleCombo('robotCombo')">
+            <span class="combobox-label robot-combo-label" id="robotComboLabel">Select a robot…</span>
             <svg class="combobox-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="combobox-panel" id="robotComboPanel">
@@ -359,28 +383,20 @@
             <div class="combobox-list" id="robotComboList"></div>
           </div>
         </div>
+        <div class="robot-row-actions">
+          <button id="start" class="primary" onclick="action('start')"><span id="startLabel">Start</span></button>
+          <button id="stop" class="secondary" onclick="action('stop')"><span id="stopLabel">Stop</span></button>
+          <button type="button" class="runner-name-link" id="runnerNameBtn" title="Click to rename this runner" onclick="editRunnerName()">
+            <span id="runnerNameText">—</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+          </button>
+          <input type="text" id="runnerNameInput" class="runner-name-input" style="display:none;"
+                 onblur="commitRunnerName()"
+                 onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){this.value=$('runnerNameText').textContent.replace(/^local-runner-/,'');this.blur();}">
+        </div>
       </div>
       <div class="hint" id="robotLoadStatus"></div>
-
-      <div id="robotConfigPanel" class="robot-config" style="display:none;">
-        <div class="robot-config-grid">
-          <div><div class="cfg-label">Type</div><div class="cfg-value" id="robotCfgType">—</div></div>
-          <div><div class="cfg-label">Platform</div><div class="cfg-value" id="robotCfgPlatform">—</div></div>
-          <div><div class="cfg-label">Browser</div><div class="cfg-value" id="robotCfgBrowser">—</div></div>
-          <div><div class="cfg-label">Version</div><div class="cfg-value" id="robotCfgVersion">—</div></div>
-          <div><div class="cfg-label">Screen size</div><div class="cfg-value" id="robotCfgScreenSize">—</div></div>
-          <div><div class="cfg-label">Proxy type</div><div class="cfg-value" id="robotCfgProxyType">—</div></div>
-        </div>
-        <div class="hint" id="robotCfgDescription"></div>
-        <div class="cfg-label" style="margin:10px 0 6px;">Capabilities</div>
-        <div id="robotCfgCapabilities" class="capabilities-list"></div>
-      </div>
-
       <div class="hint" id="robotSelection" style="margin-top:8px;">No robot selected: nothing will be created on Cerberus when starting.</div>
-      <div class="actions">
-        <button id="start" class="primary" onclick="action('start')"><span id="startLabel">Start local runner</span></button>
-        <button id="stop" class="secondary" onclick="action('stop')">Stop</button>
-      </div>
     </section>
 
     <section class="card services-card">
@@ -465,6 +481,7 @@ function showRunner(status) {
   $('appSubtitle').textContent = 'Local Selenium execution bridge';
   $('connectedUrl').textContent = status.cerberusUrl;
   $('connectedLogin').textContent = status.login ? (' as ' + status.login + ' · ' + status.mode) : (' · ' + status.mode);
+  $('runnerNameText').textContent = 'local-runner-' + (status.runnerName || status.login || '…');
   if (oauthPoll) { clearInterval(oauthPoll); oauthPoll = null; }
   if (!runnerStarted) { runnerStarted = true; loadRobotsList(); refresh(); setInterval(refresh, 1000); }
 }
@@ -479,7 +496,8 @@ function selectAuthMode(mode) {
 function setAuthStatus(kind, text, authenticated) {
   const el = $('authStatus');
   el.className = 'connection-status' + (kind === true ? ' ok' : kind === false ? ' fail' : '');
-  $('authStatusText').textContent = text;
+  el.style.display = text ? 'flex' : 'none';
+  $('authStatusText').textContent = text || '';
   $('authLogout').style.display = authenticated ? 'inline-block' : 'none';
 }
 
@@ -487,10 +505,6 @@ async function loadAuthStatus() {
   try {
     const status = await fetch('/api/auth/status').then(r => r.json());
     if (!$('cerberusUrl').value) $('cerberusUrl').value = status.cerberusUrl || '';
-    if (!$('apiKeyLogin').value) $('apiKeyLogin').value = status.login || '';
-    if (!$('keycloakUrl').value) $('keycloakUrl').value = status.keycloakUrl || '';
-    if (!$('realm').value) $('realm').value = status.realm || '';
-    if (!$('clientId').value) $('clientId').value = status.clientId || 'cerberus-local-runner';
     $('redirectUri').textContent = status.redirectUri || '—';
     selectAuthMode(status.mode === 'oauth' ? 'oauth' : 'apikey');
     if (status.authenticated) {
@@ -506,7 +520,7 @@ async function loadAuthStatus() {
 
 async function saveApiKey() {
   setAuthStatus(null, 'Testing…', false);
-  const body = JSON.stringify({cerberusUrl: $('cerberusUrl').value, apiKey: $('apiKey').value, login: $('apiKeyLogin').value});
+  const body = JSON.stringify({cerberusUrl: $('cerberusUrl').value, apiKey: $('apiKey').value});
   const result = await fetch('/api/auth/apikey', {method:'POST', headers:{'Content-Type':'application/json'}, body}).then(r => r.json());
   const kind = result.status === 'ok' ? true : result.status === 'failed' ? false : null;
   const authenticated = result.status !== 'failed';
@@ -518,12 +532,7 @@ async function startOAuth() {
   // Opened synchronously in the click handler so browsers don't treat it as a blocked popup
   // once the URL is only known after the fetch below resolves.
   const popup = window.open('', '_blank');
-  const body = JSON.stringify({
-    cerberusUrl: $('cerberusUrl').value,
-    keycloakUrl: $('keycloakUrl').value,
-    realm: $('realm').value,
-    clientId: $('clientId').value
-  });
+  const body = JSON.stringify({cerberusUrl: $('cerberusUrl').value});
   const result = await fetch('/api/auth/oauth/start', {method:'POST', headers:{'Content-Type':'application/json'}, body}).then(r => r.json());
   if (result.error) { if (popup) popup.close(); setAuthStatus(false, result.error, false); return; }
   $('redirectUri').textContent = (await fetch('/api/auth/status').then(r => r.json())).redirectUri;
@@ -544,12 +553,31 @@ async function copyRedirectUri() {
 
 async function logoutAuth() {
   await fetch('/api/auth/logout', {method:'POST'});
-  setAuthStatus(null, 'Not connected', false);
+  setAuthStatus(null, '', false);
+}
+
+function editRunnerName() {
+  const input = $('runnerNameInput');
+  input.value = $('runnerNameText').textContent.replace(/^local-runner-/, '');
+  $('runnerNameBtn').style.display = 'none';
+  input.style.display = 'inline-block';
+  input.focus();
+  input.select();
+}
+
+async function commitRunnerName() {
+  const input = $('runnerNameInput');
+  const runnerName = input.value.trim();
+  input.style.display = 'none';
+  $('runnerNameBtn').style.display = 'inline-flex';
+  if (!runnerName) return;
+  $('runnerNameText').textContent = 'local-runner-' + runnerName;
+  await fetch('/api/robots/runnerName', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({runnerName})});
 }
 
 async function switchAccount() {
   await fetch('/api/auth/logout', {method:'POST'});
-  setAuthStatus(null, 'Not connected', false);
+  setAuthStatus(null, '', false);
   showGate();
 }
 
@@ -578,8 +606,21 @@ const combos = { robotCombo: {items: [], search: ''} };
 function closeCombos() {
   document.querySelectorAll('.combobox.open').forEach(el => el.classList.remove('open'));
 }
-document.addEventListener('click', e => { if (!e.target.closest('.combobox')) closeCombos(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCombos(); });
+function closeInfoPopovers() {
+  document.querySelectorAll('.info-popover.open').forEach(el => el.classList.remove('open'));
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.combobox')) closeCombos();
+  if (!e.target.closest('.info-popover')) closeInfoPopovers();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeCombos(); closeInfoPopovers(); } });
+
+function toggleInfoPopover(id) {
+  const el = $(id);
+  const wasOpen = el.classList.contains('open');
+  closeInfoPopovers();
+  if (!wasOpen) el.classList.add('open');
+}
 
 function toggleCombo(id) {
   const el = $(id);
@@ -624,8 +665,8 @@ function renderCombo(id) {
     btn.type = 'button';
     btn.className = 'combobox-item' + (item.selected ? ' selected' : '');
     btn.innerHTML = '<svg class="combobox-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-      + '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span></span>';
-    btn.querySelector('span').textContent = item.label;
+      + '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+      + (item.html || ('<span>' + escapeHtml(item.label) + '</span>'));
     btn.onclick = () => selectComboItem(id, item.value);
     list.appendChild(btn);
   });
@@ -659,31 +700,11 @@ async function loadRobotsList(selected) {
       $('robotLoadStatus').textContent = data.message || data.error || ('HTTP ' + response.status);
       return;
     }
-    const items = (data.data || []).filter(r => r.robot).map(r => ({value: r.robot, label: r.robot}));
+    const items = (data.data || []).filter(r => r.robot).map(r => ({value: r.robot, label: r.robot, html: robotBadgesHtml(r.robot, r)}));
     setComboItems('robotCombo', items, selected, 'Select a robot…');
   } catch (e) {
     $('robotLoadStatus').textContent = 'Failed to reach Cerberus for the robot list';
   }
-}
-
-function renderCapabilities(capabilities) {
-  const box = $('robotCfgCapabilities');
-  box.innerHTML = '';
-  if (!capabilities || !capabilities.length) {
-    const empty = document.createElement('span');
-    empty.className = 'hint';
-    empty.textContent = 'No capabilities';
-    box.appendChild(empty);
-    return;
-  }
-  capabilities.forEach(cap => {
-    const chip = document.createElement('span');
-    chip.className = 'capability-chip';
-    chip.innerHTML = '<b></b><span></span>';
-    chip.querySelector('b').textContent = cap.capability + ':';
-    chip.querySelector('span').textContent = cap.value;
-    box.appendChild(chip);
-  });
 }
 
 /** The template's proxy type lives on its executor(s), not the robot itself - pick the first
@@ -694,9 +715,52 @@ function detectProxyType(robot) {
   return (withProxy && withProxy.executorProxyType) || (executors[0] && executors[0].executorProxyType) || 'NONE';
 }
 
+// ---- Browser/platform badges shown on the selected robot's combobox row ---------------
+// Small inline Lucide-style icon set (no external icon library / CDN for this offline tool).
+function iconSvg(pathContent, extraClass) {
+  return `<svg class="${extraClass || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${pathContent}</svg>`;
+}
+const SHIELD_ICON_PATH = '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>';
+
+function platformIconPath(platform) {
+  const p = (platform || '').toUpperCase();
+  if (p.includes('ANDROID') || p.includes('IOS') || p.includes('IPHONE') || p.includes('IPAD')) {
+    return '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'; // smartphone
+  }
+  return '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>'; // monitor (desktop platforms)
+}
+
+function browserIconPath(browser) {
+  const b = (browser || '').toLowerCase();
+  if (b.includes('chrom')) return '<path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>';
+  if (b.includes('firefox')) return '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>';
+  if (b.includes('safari')) return '<path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/><circle cx="12" cy="12" r="10"/>';
+  return '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>'; // globe fallback (edge, IE, opera…)
+}
+
+/** Builds the robot name + pills (platform, browser, screen size, version, type, capabilities,
+ *  proxy) markup shared by the combobox's closed-button label and each row in its dropdown
+ *  list - merging what used to be a separate detail panel into the selector itself. */
+function robotBadgesHtml(name, robot) {
+  const proxyType = detectProxyType(robot);
+  const capCount = (robot.capabilities || []).length;
+  let html = '<span class="robot-combo-name">' + escapeHtml(name) + '</span>';
+  if (robot.platform) html += `<span class="robot-pill robot-pill--platform">${iconSvg(platformIconPath(robot.platform), 'robot-pill-icon')}${escapeHtml(robot.platform)}</span>`;
+  if (robot.browser) html += `<span class="robot-pill robot-pill--browser">${iconSvg(browserIconPath(robot.browser), 'robot-pill-icon')}${escapeHtml(robot.browser)}</span>`;
+  if (robot.screenSize) html += `<span class="robot-pill robot-pill--screen">${escapeHtml(robot.screenSize)}</span>`;
+  if (robot.version) html += `<span class="robot-pill robot-pill--version">${escapeHtml(robot.version)}</span>`;
+  if (robot.type) html += `<span class="robot-pill robot-pill--type">${escapeHtml(robot.type)}</span>`;
+  if (capCount > 0) html += `<span class="robot-pill robot-pill--caps">${capCount} capabilit${capCount > 1 ? 'ies' : 'y'}</span>`;
+  if (proxyType !== 'NONE') html += `<span class="robot-pill robot-pill--proxy">${iconSvg(SHIELD_ICON_PATH, 'robot-pill-icon')}${escapeHtml(proxyType)}</span>`;
+  return html;
+}
+
+function renderRobotComboLabel(name, robot) {
+  $('robotComboLabel').innerHTML = robotBadgesHtml(name, robot);
+}
+
 async function loadRobotByName(name) {
   $('robotLoadStatus').innerHTML = '<span class="spinner spinner-muted"></span>Loading…';
-  $('robotConfigPanel').style.display = 'none';
   try {
     const response = await fetch('/api/robots/' + encodeURIComponent(name));
     const data = await response.json();
@@ -716,16 +780,8 @@ async function loadRobotByName(name) {
     robotLoadedName = name;
     robotLoadedData = robot;
     $('robotLoadStatus').textContent = '';
-    $('robotCfgType').textContent = robot.type || '—';
-    $('robotCfgPlatform').textContent = robot.platform || '—';
-    $('robotCfgBrowser').textContent = robot.browser || '—';
-    $('robotCfgVersion').textContent = robot.version || '—';
-    $('robotCfgScreenSize').textContent = robot.screenSize || '—';
+    renderRobotComboLabel(name, robot);
     const proxyType = detectProxyType(robot);
-    $('robotCfgProxyType').textContent = proxyType;
-    $('robotCfgDescription').textContent = robot.description || '';
-    renderCapabilities(robot.capabilities);
-    $('robotConfigPanel').style.display = 'block';
 
     // No manual toggle anymore: the Robot Proxy starts automatically whenever the template's
     // own executor already asks for one.
@@ -795,12 +851,12 @@ async function syncRobotOnCerberus(status) {
   robotSyncApplied = true; // set before the awaits below so a fast next poll can't re-enter
   try {
     const authStatus = await fetch('/api/auth/status').then(r => r.json());
-    const login = authStatus.login;
-    if (!login) {
-      $('robotSelection').textContent = 'No Cerberus login on file - nothing created on Cerberus';
+    const runnerName = authStatus.runnerName || authStatus.login;
+    if (!runnerName) {
+      $('robotSelection').textContent = 'No runner name on file - nothing created on Cerberus';
       return;
     }
-    const targetName = 'local-runner-' + login;
+    const targetName = 'local-runner-' + runnerName;
 
     await fetch('/api/robots/' + encodeURIComponent(targetName), {method: 'DELETE'}).catch(() => {});
 
@@ -856,30 +912,43 @@ function setServiceCheck(id, ok) {
   el.title = ok ? 'Running' : '';
 }
 
+/** Shows a muted spinner instead of the placeholder while the runner is starting and this
+ *  particular value (PID, local URL, tunnel…) hasn't come up yet. */
+function setServiceValue(id, value, placeholder, loading) {
+  const el = $(id);
+  if (!value && loading) {
+    el.innerHTML = '<span class="spinner spinner-muted"></span>' + placeholder;
+  } else {
+    el.textContent = value || placeholder;
+  }
+}
+
 async function refresh() {
   try {
     const [status, logs] = await Promise.all([fetch('/api/status').then(r=>r.json()), fetch('/api/logs').then(r=>r.json())]);
     $('state').textContent=status.state; $('state').className='badge '+status.state;
     $('state').title = 'Runner ID: ' + status.runnerId;
-    $('svcSeleniumLocal').textContent = status.seleniumUrl || '—';
-    $('svcSeleniumPid').textContent = status.seleniumPid || '—';
-    $('svcSeleniumTunnel').textContent = status.tunnelUrl || 'Not connected';
-    $('svcExtensionLocal').textContent = status.extensionUrl || '—';
-    $('svcExtensionPid').textContent = status.extensionPid || '—';
-    $('svcExtensionTunnel').textContent = status.extensionTunnelUrl || 'Not connected';
+    const starting = status.state === 'STARTING';
+    setServiceValue('svcSeleniumLocal', status.seleniumUrl, '—', starting);
+    setServiceValue('svcSeleniumPid', status.seleniumPid, '—', starting);
+    setServiceValue('svcSeleniumTunnel', status.tunnelUrl, 'Not connected', starting);
+    setServiceValue('svcExtensionLocal', status.extensionUrl, '—', starting);
+    setServiceValue('svcExtensionPid', status.extensionPid, '—', starting);
+    setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting);
     $('svcProxyRow').style.display = status.robotproxyEnabled ? 'contents' : 'none';
     $('svcProxyMacHint').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'block' : 'none';
-    $('svcProxyLocal').textContent = status.robotproxyUrl || '—';
-    $('svcProxyPid').textContent = status.robotproxyPid || '—';
-    $('svcProxyTunnel').textContent = status.proxyTunnelUrl || 'Not connected';
+    setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting);
+    setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
+    setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl);
     setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl);
 
-    const starting = status.state === 'STARTING';
     $('start').disabled=['STARTING','READY','STOPPING'].includes(status.state);
     $('stop').disabled=['STOPPED','STOPPING'].includes(status.state);
     $('startLabel').innerHTML = starting ? '<span class="spinner"></span>Starting…' : 'Start local runner';
+    const stopping = status.state === 'STOPPING';
+    $('stopLabel').innerHTML = stopping ? '<span class="spinner spinner-muted"></span>Stopping…' : 'Stop';
     $('error').style.display=status.error?'block':'none'; $('error').textContent=status.error;
     renderLogs(logs);
     if (status.robotName !== selectedRobotName) {

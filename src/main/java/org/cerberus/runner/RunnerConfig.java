@@ -84,6 +84,7 @@ final class RunnerConfig {
         result.setProperty("cerberus.auth.oauth.refreshToken", "");
         result.setProperty("cerberus.auth.oauth.expiresAt", "0");
         result.setProperty("robot.name", "");
+        result.setProperty("robot.runnerName", "");
         return result;
     }
 
