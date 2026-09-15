@@ -9,7 +9,7 @@
 # cerberusRobotProxy is only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy feature).
 # mitmproxy is intentionally not bundled on macOS - see build-macos.sh and RunnerConfig.java.
 
-seleniumServer=http://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server-4.44.0.jar
-cerberusExtension=http://vm.cerberus-testing.org/delivery/local-runner/1.0.0/mac-arm64/cerberus-robot-extension-2.1-SNAPSHOT-macarm.jar
-cerberusRobotProxy=http://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy-1.8-SNAPSHOT.jar
-cloudflared=http://vm.cerberus-testing.org/delivery/local-runner/1.0.0/mac-arm64/cloudflared
+seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server-4.44.0.jar
+cerberusExtension=https://vm.cerberus-testing.org/delivery/cerberus-robot-extension-2.1-SNAPSHOT-macarm.jar
+cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy-1.8-SNAPSHOT.jar
+cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/mac-arm64/cloudflared
