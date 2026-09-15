@@ -260,6 +260,10 @@
     .service-row > div { padding-bottom:10px; border-bottom:1px solid var(--crb-new-border); font-size:13px; overflow-wrap:anywhere; color:var(--crb-text); }
     .service-row:last-of-type > div { border-bottom:0; padding-bottom:0; }
     .service-name { font-weight:600; }
+    .service-value { display:flex; align-items:center; gap:6px; }
+    .service-open-link { display:inline-flex; align-items:center; color:var(--crb-text-muted); flex-shrink:0; }
+    .service-open-link:hover { color:var(--crb-blue-color); }
+    .service-open-link svg { width:14px; height:14px; }
 
     /* Combobox — inspired by Cerberus's single-select dropdown (include/templates/selectDropdown.html):
        a bordered button with a chevron, opening a floating panel with a search box and a checkmarked list. */
@@ -912,12 +916,19 @@ function setServiceCheck(id, ok) {
   el.title = ok ? 'Running' : '';
 }
 
+const EXTERNAL_LINK_ICON_PATH = '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>';
+
 /** Shows a muted spinner instead of the placeholder while the runner is starting and this
- *  particular value (PID, local URL, tunnel…) hasn't come up yet. */
-function setServiceValue(id, value, placeholder, loading) {
+ *  particular value (PID, local URL, tunnel…) hasn't come up yet. When linkable and a value is
+ *  present, appends a small "open in a new tab" link next to it (e.g. Selenium/Proxy local URLs). */
+function setServiceValue(id, value, placeholder, loading, linkable) {
   const el = $(id);
   if (!value && loading) {
     el.innerHTML = '<span class="spinner spinner-muted"></span>' + placeholder;
+  } else if (value && linkable) {
+    el.innerHTML = '<span>' + escapeHtml(value) + '</span>'
+      + '<a class="service-open-link" href="' + escapeHtml(value) + '" target="_blank" rel="noopener" title="Open in a new tab">'
+      + iconSvg(EXTERNAL_LINK_ICON_PATH, 'service-open-icon') + '</a>';
   } else {
     el.textContent = value || placeholder;
   }
@@ -929,7 +940,7 @@ async function refresh() {
     $('state').textContent=status.state; $('state').className='badge '+status.state;
     $('state').title = 'Runner ID: ' + status.runnerId;
     const starting = status.state === 'STARTING';
-    setServiceValue('svcSeleniumLocal', status.seleniumUrl, '—', starting);
+    setServiceValue('svcSeleniumLocal', status.seleniumUrl, '—', starting, true);
     setServiceValue('svcSeleniumPid', status.seleniumPid, '—', starting);
     setServiceValue('svcSeleniumTunnel', status.tunnelUrl, 'Not connected', starting);
     setServiceValue('svcExtensionLocal', status.extensionUrl, '—', starting);
@@ -937,7 +948,7 @@ async function refresh() {
     setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting);
     $('svcProxyRow').style.display = status.robotproxyEnabled ? 'contents' : 'none';
     $('svcProxyMacHint').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'block' : 'none';
-    setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting);
+    setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl);

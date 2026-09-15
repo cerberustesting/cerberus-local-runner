@@ -45,6 +45,9 @@ final class CerberusAuthService {
     /** Refresh a token this far ahead of its expiry so an in-flight request never races the deadline. */
     private static final long TOKEN_EXPIRY_SKEW_SECONDS = 30;
 
+    /** Used when Cerberus's /api/public/oauth-config omits localRunnerClientId. */
+    private static final String DEFAULT_CLIENT_ID = "cerberus-local-runner";
+
     private final RunnerConfig config;
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private final Map<String, PendingOAuth> pending = new ConcurrentHashMap<>();
@@ -222,10 +225,10 @@ final class CerberusAuthService {
         String keycloakUrl = jsonField(response.body(), "keycloakUrl");
         String realm = jsonField(response.body(), "realm");
         String clientId = jsonField(response.body(), "localRunnerClientId");
-        if (!enabled || isBlank(keycloakUrl) || isBlank(realm) || isBlank(clientId)) {
+        if (!enabled || isBlank(keycloakUrl) || isBlank(realm)) {
             throw new IOException("OAuth sign-in is not enabled on this Cerberus instance; use an API key instead");
         }
-        return new OAuthConfig(true, normalizeUrl(keycloakUrl), realm.trim(), clientId.trim());
+        return new OAuthConfig(true, normalizeUrl(keycloakUrl), realm.trim(), isBlank(clientId) ? DEFAULT_CLIENT_ID : clientId.trim());
     }
 
     private static boolean isBlank(String value) {
