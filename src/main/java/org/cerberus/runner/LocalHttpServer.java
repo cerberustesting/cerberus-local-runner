@@ -36,6 +36,7 @@ final class LocalHttpServer {
         server.createContext("/api/auth/test", this::authTest);
         server.createContext("/api/auth/logout", this::authLogout);
         server.createContext("/oauth/callback", this::oauthCallback);
+        server.createContext("/api/browsers", this::browsers);
         server.createContext("/api/robots", this::robotsEndpoint);
         server.createContext("/api/robotproxy/enable", this::robotproxyEnable);
         server.createContext("/cerberus-logo.png", exchange -> image(exchange, "/cerberus-logo.png"));
@@ -99,6 +100,13 @@ final class LocalHttpServer {
                 "\"robotproxyUrl\":\"" + json(supervisor.robotproxyUrl()) + "\"," +
                 "\"proxyTunnelUrl\":\"" + json(supervisor.proxyTunnelUrl()) + "\"," +
                 "\"robotproxyPid\":" + supervisor.robotproxyPid().map(String::valueOf).orElse("null") + "}";
+        send(exchange, 200, "application/json; charset=utf-8", body);
+    }
+
+    private void browsers(HttpExchange exchange) throws IOException {
+        String body = BrowserDetector.detect().stream()
+                .map(b -> "{\"name\":\"" + json(b.name()) + "\",\"available\":" + b.available() + "}")
+                .collect(Collectors.joining(",", "[", "]"));
         send(exchange, 200, "application/json; charset=utf-8", body);
     }
 
