@@ -30,6 +30,12 @@ final class LocalHttpServer {
         server.createContext("/api/logs", this::logs);
         server.createContext("/api/start", exchange -> action(exchange, supervisor::startAsync));
         server.createContext("/api/stop", exchange -> action(exchange, supervisor::stop));
+        server.createContext("/api/services/selenium/stop", exchange -> action(exchange, supervisor::stopSelenium));
+        server.createContext("/api/services/selenium/start", exchange -> action(exchange, supervisor::startSelenium));
+        server.createContext("/api/services/extension/stop", exchange -> action(exchange, supervisor::stopExtension));
+        server.createContext("/api/services/extension/start", exchange -> action(exchange, supervisor::startExtension));
+        server.createContext("/api/services/robotproxy/stop", exchange -> action(exchange, supervisor::stopRobotProxy));
+        server.createContext("/api/services/robotproxy/start", exchange -> action(exchange, supervisor::startRobotProxy));
         server.createContext("/api/auth/status", this::authStatus);
         server.createContext("/api/auth/apikey", this::authApiKey);
         server.createContext("/api/auth/oauth/start", this::authOAuthStart);
@@ -99,7 +105,10 @@ final class LocalHttpServer {
                 "\"robotproxyEnabled\":" + supervisor.robotproxyEnabled() + "," +
                 "\"robotproxyUrl\":\"" + json(supervisor.robotproxyUrl()) + "\"," +
                 "\"proxyTunnelUrl\":\"" + json(supervisor.proxyTunnelUrl()) + "\"," +
-                "\"robotproxyPid\":" + supervisor.robotproxyPid().map(String::valueOf).orElse("null") + "}";
+                "\"robotproxyPid\":" + supervisor.robotproxyPid().map(String::valueOf).orElse("null") + "," +
+                "\"seleniumBusy\":" + supervisor.seleniumBusy() + "," +
+                "\"extensionBusy\":" + supervisor.extensionBusy() + "," +
+                "\"robotproxyBusy\":" + supervisor.robotproxyBusy() + "}";
         send(exchange, 200, "application/json; charset=utf-8", body);
     }
 
@@ -255,15 +264,23 @@ final class LocalHttpServer {
     }
 
     private String callbackPage(boolean success, String message) {
-        String color = success ? "#10b981" : "#e63757";
+        String color = success ? "var(--crb-green-color)" : "#e63757";
         // window.close() is a no-op in most browsers on a tab that wasn't opened via window.open(),
         // so this is a best-effort convenience, not something the flow depends on.
         String autoClose = success ? "<script>setTimeout(function(){window.close();},1200);</script>" : "";
+        // Mirrors index.html's theme variables/rules so this tab (opened separately by Keycloak's
+        // redirect) matches whatever theme the user picked there, instead of being stuck in dark
+        // mode - crb-theme is read from localStorage before first paint to avoid a flash.
         return "<!doctype html><html><head><meta charset=\"utf-8\"><title>Cerberus Local Runner</title>"
-                + "<style>body{font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#e2e8f0;"
+                + "<script>(function(){var t=localStorage.getItem('crb-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>"
+                + "<style>"
+                + ":root{color-scheme:light;--crb-bg:#f5f6fa;--crb-new-bg:rgba(255,255,255,.95);--crb-new-border:#dbe3ee;--crb-text:#1e293b;--crb-text-muted:#64748b;--crb-green-color:#10b981}"
+                + "@media (prefers-color-scheme: dark){:root:not([data-theme=\"light\"]){color-scheme:dark;--crb-bg:#1e222a;--crb-new-bg:rgba(30,41,59,.95);--crb-new-border:#334155;--crb-text:#f1f5f9;--crb-text-muted:#94a3b8;--crb-green-color:#34d399}}"
+                + ":root[data-theme=\"dark\"]{color-scheme:dark;--crb-bg:#1e222a;--crb-new-bg:rgba(30,41,59,.95);--crb-new-border:#334155;--crb-text:#f1f5f9;--crb-text-muted:#94a3b8;--crb-green-color:#34d399}"
+                + "body{font-family:Inter,system-ui,sans-serif;background:var(--crb-bg);color:var(--crb-text);"
                 + "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}"
-                + ".box{max-width:420px;padding:28px;border-radius:16px;background:#1e293b;border:1px solid #334155;text-align:center}"
-                + "h1{font-size:18px;margin:0 0 8px;color:" + color + "}p{color:#94a3b8;font-size:14px}</style></head>"
+                + ".box{max-width:420px;padding:28px;border-radius:16px;background:var(--crb-new-bg);border:1px solid var(--crb-new-border);text-align:center}"
+                + "h1{font-size:18px;margin:0 0 8px;color:" + color + "}p{color:var(--crb-text-muted);font-size:14px}</style></head>"
                 + "<body><div class=\"box\"><h1>" + (success ? "Connected" : "Sign-in failed") + "</h1><p>" + message + "</p></div></body>" + autoClose + "</html>";
     }
 

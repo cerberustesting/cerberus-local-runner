@@ -258,13 +258,21 @@
     .runner-name-input { height:32px; font-size:13px; width:170px; }
     .services-card { margin-bottom:14px; }
 
-    .service-table { display:grid; grid-template-columns:110px 1fr 70px 1.4fr; gap:10px 16px; align-items:center; }
+    .service-table { display:grid; grid-template-columns:110px 1fr 70px 1.4fr auto; gap:10px 16px; align-items:center; }
     .service-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--crb-text-label); padding-bottom:8px; border-bottom:1px solid var(--crb-new-border); }
     .service-row { display:contents; }
     .service-row > div { padding-bottom:10px; border-bottom:1px solid var(--crb-new-border); font-size:13px; overflow-wrap:anywhere; color:var(--crb-text); }
     .service-row:last-of-type > div { border-bottom:0; padding-bottom:0; }
     .service-name { font-weight:600; }
     .service-value { display:flex; align-items:center; gap:6px; }
+    .service-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+    .service-action-btn {
+      display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0;
+      border:1px solid var(--crb-new-border); border-radius:8px; background:transparent; color:var(--crb-text-muted); cursor:pointer;
+    }
+    .service-action-btn:hover:not(:disabled) { background:var(--crb-new-border); color:var(--crb-text); }
+    .service-action-btn:disabled { opacity:.4; cursor:default; }
+    .service-action-btn svg { width:14px; height:14px; }
     .service-open-link { display:inline-flex; align-items:center; color:var(--crb-text-muted); flex-shrink:0; }
     .service-open-link:hover { color:var(--crb-blue-color); }
     .service-open-link svg { width:14px; height:14px; }
@@ -419,12 +427,14 @@
         <div class="service-head">Local</div>
         <div class="service-head">PID</div>
         <div class="service-head">Tunnel</div>
+        <div class="service-head">Actions</div>
 
         <div class="service-row">
           <div class="service-name">Selenium <span class="svc-check" id="svcSeleniumCheck"></span></div>
           <div class="service-value" id="svcSeleniumLocal">—</div>
           <div class="service-value" id="svcSeleniumPid">—</div>
           <div class="service-value" id="svcSeleniumTunnel">—</div>
+          <div class="service-actions" id="svcSeleniumActions">—</div>
         </div>
 
         <div class="service-row">
@@ -432,6 +442,7 @@
           <div class="service-value" id="svcExtensionLocal">—</div>
           <div class="service-value" id="svcExtensionPid">—</div>
           <div class="service-value" id="svcExtensionTunnel">—</div>
+          <div class="service-actions" id="svcExtensionActions">—</div>
         </div>
 
         <div class="service-row" id="svcProxyRow" style="display:none;">
@@ -439,6 +450,7 @@
           <div class="service-value" id="svcProxyLocal">—</div>
           <div class="service-value" id="svcProxyPid">—</div>
           <div class="service-value" id="svcProxyTunnel">—</div>
+          <div class="service-actions" id="svcProxyActions">—</div>
         </div>
       </div>
       <div class="hint" id="svcProxyMacHint" style="display:none;">On macOS, the Robot Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
@@ -496,7 +508,14 @@ function showRunner(status) {
   $('connectedLogin').textContent = status.login ? (' as ' + status.login + ' · ' + status.mode) : (' · ' + status.mode);
   $('runnerNameText').textContent = 'local-runner-' + (status.runnerName || status.login || '…');
   if (oauthPoll) { clearInterval(oauthPoll); oauthPoll = null; }
-  if (!runnerStarted) { runnerStarted = true; loadRobotsList(); loadLocalBrowsers(); refresh(); setInterval(refresh, 1000); }
+  if (!runnerStarted) {
+    runnerStarted = true;
+    loadRobotsList(); loadLocalBrowsers(); refresh(); setInterval(refresh, 1000);
+    // The initial /api/auth/status check above only happens once at page load - keep re-checking
+    // so a session that expires (or gets revoked) while this tab stays open still falls back to
+    // the sign-in screen instead of leaving a broken "connected" view up indefinitely.
+    setInterval(loadAuthStatus, 60000);
+  }
 }
 
 function selectAuthMode(mode) {
@@ -522,7 +541,9 @@ async function loadAuthStatus() {
     selectAuthMode(status.mode === 'oauth' ? 'oauth' : 'apikey');
     if (status.authenticated) {
       showRunner(status);
-    } else if (!runnerStarted) {
+    } else {
+      // Also fires once an already-shown runner view's session turns out to be expired/revoked
+      // (caught by the periodic recheck below) - not just before the very first sign-in.
       showGate();
     }
     return status;
@@ -919,6 +940,7 @@ function renderLogs(logs) {
 // and POST /public/robots creating the robot + its capabilities + its executors in one call (both
 // proxied as-is by our own backend at /api/robots and /api/robots/{name}).
 let robotSyncApplied = false;
+let previousServiceBusy = {selenium: false, extension: false, robotproxy: false};
 
 function toHttpScheme(url) {
   if (!url) return '';
@@ -940,21 +962,21 @@ async function syncRobotOnCerberus(status) {
     await fetch('/api/robots/' + encodeURIComponent(targetName), {method: 'DELETE'}).catch(() => {});
 
     const template = robotLoadedData;
-    const templateExecutors = template.executors || [];
-    const templateExecutor = templateExecutors.find(ex => ex.executorProxyType && ex.executorProxyType !== 'NONE')
-      || templateExecutors[0] || {};
 
     const executor = {executor: 'MAIN', isActive: true, rank: 1, host: toHttpScheme(status.tunnelUrl), port: '80'};
     if (status.extensionTunnelUrl) {
       executor.executorExtensionHost = toHttpScheme(status.extensionTunnelUrl);
       executor.executorExtensionPort = '80';
     }
-    if (templateExecutor.browserProxyHost) executor.browserProxyHost = templateExecutor.browserProxyHost;
-    if (templateExecutor.browserProxyPort) executor.browserProxyPort = templateExecutor.browserProxyPort;
     if (status.robotproxyEnabled && status.proxyTunnelUrl) {
       executor.executorProxyServiceHost = status.proxyTunnelUrl.replace(/^https?:\/\//, '');
       executor.executorProxyServicePort = '80';
       executor.executorProxyType = 'MITMPROXY';
+      // The browser Selenium launches always runs on this same machine as the robot-proxy's
+      // mitmdump instance, so it's always reached at localhost:8888 - regardless of the tunnel
+      // URL above (that one's for Cerberus to reach the robot-proxy's own REST control API).
+      executor.executorBrowserProxyHost = 'localhost';
+      executor.executorBrowserProxyPort = '8888';
     }
     const body = {
       robot: targetName,
@@ -992,6 +1014,33 @@ function setServiceCheck(id, ok) {
 }
 
 const EXTERNAL_LINK_ICON_PATH = '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>';
+const STOP_ICON_PATH = '<rect width="14" height="14" x="5" y="5" rx="2"/>';
+const START_ICON_PATH = '<polygon points="6 3 20 12 6 21 6 3"/>';
+
+/** Maps each Services row's element-id prefix to the /api/services/{name}/... path segment. */
+const SERVICE_API_NAME = {svcSelenium: 'selenium', svcExtension: 'extension', svcProxy: 'robotproxy'};
+
+/** Independent Stop/Start for a single service row: restarting just this one gives it a fresh
+ *  PID and (outside of "named" tunnel mode, where a single shared tunnel process serves every
+ *  hostname) a fresh dedicated tunnel URL, without touching the other rows. */
+function setServiceActions(prefix, actionable, running, busy) {
+  const el = $(prefix + 'Actions');
+  if (!actionable) { el.textContent = '—'; return; }
+  if (busy) { el.innerHTML = '<span class="spinner spinner-muted" title="Working…"></span>'; return; }
+  const api = SERVICE_API_NAME[prefix];
+  el.innerHTML = running
+    ? `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','stop')" title="Stop">${iconSvg(STOP_ICON_PATH)}</button>`
+    : `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','start')" title="Start">${iconSvg(START_ICON_PATH)}</button>`;
+}
+
+async function serviceAction(service, action) {
+  try {
+    await fetch('/api/services/' + service + '/' + action, {method: 'POST'});
+  } catch (e) {
+    // best-effort - the next refresh() tick reflects whatever state actually resulted
+  }
+  refresh();
+}
 
 /** Shows a muted spinner instead of the placeholder while the runner is starting and this
  *  particular value (PID, local URL, tunnel…) hasn't come up yet. When linkable and a value is
@@ -1029,6 +1078,18 @@ async function refresh() {
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl);
     setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl);
+
+    const ready = status.state === 'READY';
+    setServiceActions('svcSelenium', ready, !!status.seleniumPid, !!status.seleniumBusy);
+    setServiceActions('svcExtension', ready, !!status.extensionPid, !!status.extensionBusy);
+    setServiceActions('svcProxy', ready, !!status.robotproxyPid, !!status.robotproxyBusy);
+    // A service that just finished an independent restart may have a brand-new tunnel URL -
+    // force the next Cerberus sync so the robot's executor gets updated with it.
+    ['selenium', 'extension', 'robotproxy'].forEach(key => {
+      const busyNow = !!status[key + 'Busy'];
+      if (previousServiceBusy[key] && !busyNow) robotSyncApplied = false;
+      previousServiceBusy[key] = busyNow;
+    });
 
     $('start').disabled=['STARTING','READY','STOPPING'].includes(status.state);
     $('stop').disabled=['STOPPED','STOPPING'].includes(status.state);

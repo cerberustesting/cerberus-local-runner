@@ -93,6 +93,11 @@ final class RunnerConfig {
     }
 
     private static Path detectConfigDirectory() {
+        // Lets run-dev.sh point at a throwaway config directory instead of the real app's, so
+        // dev runs (which force mock.mode=true) never clobber the packaged app's own settings.
+        String override = System.getenv("CRB_CONFIG_DIR");
+        if (override != null && !override.isBlank()) return Path.of(override);
+
         Path home = Path.of(System.getProperty("user.home"));
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("win")) {

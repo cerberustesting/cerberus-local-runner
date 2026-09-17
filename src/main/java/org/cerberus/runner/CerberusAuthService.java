@@ -65,8 +65,7 @@ final class CerberusAuthService {
             String verified = config.get("cerberus.auth.verified");
             authenticated = "ok".equals(verified) || "unknown".equals(verified);
         } else if ("oauth".equals(mode)) {
-            // A non-blank access token already proves a successful Keycloak login independently of /mcp.
-            authenticated = !config.get("cerberus.auth.oauth.accessToken").isBlank();
+            authenticated = ensureValidOAuthSession();
         } else {
             authenticated = false;
         }
@@ -86,6 +85,21 @@ final class CerberusAuthService {
         if ("apikey".equals(mode)) return new AuthHeader("X-API-KEY", config.get("cerberus.auth.apiKey"));
         if ("oauth".equals(mode)) return new AuthHeader("Authorization", "Bearer " + oauthAccessToken());
         return null;
+    }
+
+    /** Backs status()'s "authenticated" flag: a merely non-blank access token doesn't mean the
+     *  session is still good - it just means it *was* good at some point in the past. Force the
+     *  same expiry check/refresh a real API call would trigger, so a stale cached session (e.g.
+     *  the refresh token itself expired or was revoked) gets caught right away and reported as
+     *  logged out, instead of only surfacing as an obscure error the next time something is clicked. */
+    private boolean ensureValidOAuthSession() {
+        if (config.get("cerberus.auth.oauth.accessToken").isBlank()) return false;
+        try {
+            oauthAccessToken();
+            return true;
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     /** Returns a valid access token, transparently refreshing it first if it has expired (or is about to). */

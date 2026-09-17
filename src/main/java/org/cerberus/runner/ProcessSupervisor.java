@@ -43,6 +43,9 @@ final class ProcessSupervisor {
     private Process cloudflaredExtension;
     private Process robotproxy;
     private Process cloudflaredProxy;
+    private volatile boolean seleniumBusy;
+    private volatile boolean extensionBusy;
+    private volatile boolean robotproxyBusy;
 
     ProcessSupervisor(RunnerConfig config) {
         this.config = config;
@@ -120,6 +123,9 @@ final class ProcessSupervisor {
         tunnelUrl = "";
         extensionTunnelUrl = "";
         proxyTunnelUrl = "";
+        seleniumBusy = false;
+        extensionBusy = false;
+        robotproxyBusy = false;
         state = State.STOPPED;
         log("runner", "Stopped");
     }
@@ -149,6 +155,154 @@ final class ProcessSupervisor {
             process.destroyForcibly();
         }
         log("runner", "Stopped " + name);
+    }
+
+    // ---- Independent per-service restart (Stop/Start on each Services row) --------------------
+    // Only meaningful once the orchestrated startup succeeded (state READY): each of these
+    // manages just its own local process, plus its own dedicated Cloudflare tunnel process where
+    // one exists. In "named" tunnel mode there is a single shared cloudflared process serving
+    // every hostname's ingress rule server-side, so it's left alone here - only the local process
+    // is restarted, and the (fixed, pre-provisioned) public URL can't and doesn't need to change.
+
+    private boolean namedTunnelMode() {
+        return "named".equalsIgnoreCase(config.get("cloudflared.mode"));
+    }
+
+    private static boolean isAlive(Process process) {
+        return process != null && process.isAlive();
+    }
+
+    private static String messageOf(Exception exception) {
+        return exception.getMessage() == null ? exception.toString() : exception.getMessage();
+    }
+
+    synchronized void stopSelenium() {
+        if (state != State.READY || seleniumBusy || !isAlive(selenium)) return;
+        seleniumBusy = true;
+        CompletableFuture.runAsync(this::stopSeleniumInternal);
+    }
+
+    private void stopSeleniumInternal() {
+        log("runner", "Stopping Selenium");
+        if (!namedTunnelMode()) {
+            destroy(cloudflared, "cloudflared");
+            cloudflared = null;
+            tunnelUrl = "";
+        }
+        destroy(selenium, "selenium");
+        selenium = null;
+        seleniumBusy = false;
+    }
+
+    synchronized void startSelenium() {
+        if (state != State.READY || seleniumBusy || isAlive(selenium)) return;
+        seleniumBusy = true;
+        CompletableFuture.runAsync(this::startSeleniumInternal);
+    }
+
+    private void startSeleniumInternal() {
+        try {
+            log("runner", "Starting Selenium");
+            selenium = launch(seleniumCommand(), "selenium", null);
+            waitForPort("127.0.0.1", config.integer("selenium.port"), "selenium", selenium);
+            log("runner", "Selenium is ready at " + seleniumLocalUrl());
+            if (!namedTunnelMode()) {
+                cloudflared = launch(cloudflaredCommand(seleniumLocalUrl()), "cloudflared", url -> tunnelUrl = url);
+                tunnelUrl = waitForTunnel(cloudflared, null, () -> tunnelUrl);
+                log("runner", "Selenium tunnel ready at " + tunnelUrl);
+            }
+        } catch (Exception exception) {
+            error = "Selenium start failed: " + messageOf(exception);
+            log("runner", error);
+        } finally {
+            seleniumBusy = false;
+        }
+    }
+
+    synchronized void stopExtension() {
+        if (state != State.READY || extensionBusy || !isAlive(extension)) return;
+        extensionBusy = true;
+        CompletableFuture.runAsync(this::stopExtensionInternal);
+    }
+
+    private void stopExtensionInternal() {
+        log("runner", "Stopping Cerberus Extension");
+        if (!namedTunnelMode()) {
+            destroy(cloudflaredExtension, "cloudflared-extension");
+            cloudflaredExtension = null;
+            extensionTunnelUrl = "";
+        }
+        destroy(extension, "extension");
+        extension = null;
+        extensionBusy = false;
+    }
+
+    synchronized void startExtension() {
+        if (state != State.READY || extensionBusy || isAlive(extension)) return;
+        extensionBusy = true;
+        CompletableFuture.runAsync(this::startExtensionInternal);
+    }
+
+    private void startExtensionInternal() {
+        try {
+            log("runner", "Starting Cerberus Extension");
+            extension = launch(extensionCommand(), "extension", null);
+            waitForPort("127.0.0.1", config.integer("extension.port"), "extension", extension);
+            log("runner", "Cerberus Extension is ready at " + extensionLocalUrl());
+            if (!namedTunnelMode()) {
+                cloudflaredExtension = launch(cloudflaredCommand(extensionLocalUrl()), "cloudflared-extension", url -> extensionTunnelUrl = url);
+                extensionTunnelUrl = waitForTunnel(cloudflaredExtension, null, () -> extensionTunnelUrl);
+                log("runner", "Extension tunnel ready at " + extensionTunnelUrl);
+            }
+        } catch (Exception exception) {
+            error = "Extension start failed: " + messageOf(exception);
+            log("runner", error);
+        } finally {
+            extensionBusy = false;
+        }
+    }
+
+    synchronized void stopRobotProxy() {
+        if (state != State.READY || robotproxyBusy || !isAlive(robotproxy)) return;
+        robotproxyBusy = true;
+        CompletableFuture.runAsync(this::stopRobotProxyInternal);
+    }
+
+    private void stopRobotProxyInternal() {
+        log("runner", "Stopping Cerberus Robot Proxy");
+        if (!namedTunnelMode()) {
+            destroy(cloudflaredProxy, "cloudflared-proxy");
+            cloudflaredProxy = null;
+            proxyTunnelUrl = "";
+        }
+        destroy(robotproxy, "robotproxy");
+        robotproxy = null;
+        robotproxyBusy = false;
+    }
+
+    synchronized void startRobotProxy() {
+        if (state != State.READY || robotproxyBusy || isAlive(robotproxy) || !config.bool("robotproxy.enabled")) return;
+        robotproxyBusy = true;
+        CompletableFuture.runAsync(this::startRobotProxyInternal);
+    }
+
+    private void startRobotProxyInternal() {
+        try {
+            log("runner", "Starting Cerberus Robot Proxy");
+            robotproxy = launch(robotproxyCommand(), "robotproxy", null);
+            waitForPort("127.0.0.1", config.integer("robotproxy.port"), "robotproxy", robotproxy);
+            log("runner", "Robot Proxy is ready at " + robotproxyLocalUrl());
+            if (!namedTunnelMode()) {
+                cloudflaredProxy = launch(cloudflaredCommand(robotproxyLocalUrl()), "cloudflared-proxy", url -> proxyTunnelUrl = url);
+                proxyTunnelUrl = waitForTunnel(cloudflaredProxy, null, () -> proxyTunnelUrl);
+                log("runner", "Robot Proxy tunnel ready at " + proxyTunnelUrl);
+            }
+        } catch (Exception exception) {
+            error = "Robot Proxy start failed: " + messageOf(exception);
+            log("runner", error);
+        } finally {
+            robotproxyBusy = false;
+        }
     }
 
     private List<String> seleniumCommand() throws IOException {
@@ -359,4 +513,7 @@ final class ProcessSupervisor {
     Optional<Long> robotproxyPid() { return robotproxy != null && robotproxy.isAlive() ? Optional.of(robotproxy.pid()) : Optional.empty(); }
     Optional<Long> extensionPid() { return extension != null && extension.isAlive() ? Optional.of(extension.pid()) : Optional.empty(); }
     Optional<Long> cloudflaredExtensionPid() { return cloudflaredExtension != null && cloudflaredExtension.isAlive() ? Optional.of(cloudflaredExtension.pid()) : Optional.empty(); }
+    boolean seleniumBusy() { return seleniumBusy; }
+    boolean extensionBusy() { return extensionBusy; }
+    boolean robotproxyBusy() { return robotproxyBusy; }
 }
