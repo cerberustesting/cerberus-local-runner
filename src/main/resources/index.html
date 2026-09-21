@@ -258,13 +258,65 @@
     .runner-name-input { height:32px; font-size:13px; width:170px; }
     .services-card { margin-bottom:14px; }
 
-    .service-table { display:grid; grid-template-columns:110px 1fr 70px 1.4fr auto; gap:10px 16px; align-items:center; }
-    .service-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--crb-text-label); padding-bottom:8px; border-bottom:1px solid var(--crb-new-border); }
-    .service-row { display:contents; }
-    .service-row > div { padding-bottom:10px; border-bottom:1px solid var(--crb-new-border); font-size:13px; overflow-wrap:anywhere; color:var(--crb-text); }
-    .service-row:last-of-type > div { border-bottom:0; padding-bottom:0; }
-    .service-name { font-weight:600; }
-    .service-value { display:flex; align-items:center; gap:6px; }
+    /* Services topology: a small architecture diagram (local machine -> optional proxy ->
+       internet) instead of a plain table, so a service's up/down state and its tunnel are
+       visually obvious at a glance rather than buried in table cells. */
+    .topology { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .topology-group {
+      display:flex; flex-direction:column; gap:10px; padding:14px; border-radius:14px;
+      border:1.5px solid var(--crb-new-border); background:var(--crb-grey-light-color);
+      transition:border-color .2s ease, background-color .2s ease;
+    }
+    .topology-group.up { border-color:var(--crb-green-color); background:var(--crb-green-light-color); }
+    .topology-group-label {
+      display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em; color:var(--crb-text-label);
+    }
+    .topology-group-label svg { width:14px; height:14px; }
+    .topology-nodes { display:flex; gap:10px; flex-wrap:wrap; }
+    .topology-branch { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .topology-arrow { color:var(--crb-text-muted); font-size:20px; flex-shrink:0; }
+    .topology-internet {
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+      min-width:90px; padding:14px; border-radius:14px; border:1.5px dashed var(--crb-new-border);
+      color:var(--crb-text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    }
+    .topology-internet svg { width:22px; height:22px; }
+
+    .service-node {
+      display:flex; flex-direction:column; gap:8px; min-width:180px; padding:12px 14px; border-radius:12px;
+      background:var(--crb-new-bg); border:1.5px solid var(--crb-new-border); transition:border-color .2s ease;
+    }
+    .service-node.up { border-color:var(--crb-green-color); }
+    .service-node-header { display:flex; align-items:center; gap:8px; }
+    .service-node-icon {
+      display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:8px;
+      background:var(--crb-grey-light-color); color:var(--crb-text-muted); font-weight:700; font-size:11.5px; flex-shrink:0;
+    }
+    .service-node-icon svg { width:16px; height:16px; }
+    .service-node.up .service-node-icon { background:var(--crb-green-light-color); color:var(--crb-green-dark-color); }
+    .service-node-name { font-weight:700; font-size:13.5px; }
+    .service-node-value { font-size:12px; color:var(--crb-text-muted); overflow-wrap:anywhere; }
+    .service-node-pid::before { content:'PID '; color:var(--crb-text-label); font-weight:600; }
+    .service-node-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:2px; }
+
+    /* Status dot: grey when the service is stopped, green (with a soft halo) when it's up. */
+    .svc-check {
+      display:inline-block; width:10px; height:10px; margin-left:auto; border-radius:999px;
+      background:var(--crb-grey-color); flex-shrink:0; transition:background-color .2s ease, box-shadow .2s ease;
+    }
+    .svc-check.show { background:var(--crb-green-color); box-shadow:0 0 0 3px var(--crb-green-light-color); }
+    .svc-check.pending { background:var(--crb-blue-color); box-shadow:0 0 0 3px var(--crb-blue-light-color); animation:crb-blink 1s ease-in-out infinite; }
+    @keyframes crb-blink { 50% { opacity:.25; } }
+
+    .cloud-badge {
+      display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px;
+      border:1px solid var(--crb-new-border); background:transparent; color:var(--crb-text-muted); font-size:11.5px; font-weight:600;
+    }
+    .cloud-badge:hover { background:var(--crb-new-border); color:var(--crb-text); }
+    .cloud-badge svg { width:13px; height:13px; }
+    .cloud-badge.connected { color:var(--crb-blue-dark-color); border-color:transparent; background:var(--crb-blue-light-color); }
+
     .service-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
     .service-action-btn {
       display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0;
@@ -322,7 +374,6 @@
     </div>
     <div class="header-actions">
       <button id="themeToggle" class="secondary theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-      <div id="state" class="badge" style="display:none;" title="">LOADING</div>
     </div>
   </header>
 
@@ -416,50 +467,118 @@
       </div>
       <div class="hint" id="robotLoadStatus"></div>
       <div class="hint" id="robotSelection" style="margin-top:8px;"></div>
-      <div class="hint" style="margin-top:14px;">Browsers detected on this machine</div>
-      <div id="localBrowsers" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
     </section>
 
     <section class="card services-card">
-      <div class="label" style="margin-bottom:14px;">Services</div>
-      <div class="service-table">
-        <div class="service-head">Service</div>
-        <div class="service-head">Local</div>
-        <div class="service-head">PID</div>
-        <div class="service-head">Tunnel</div>
-        <div class="service-head">Actions</div>
+      <div class="label" style="margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;">
+        <span>Services</span>
+        <div id="state" class="badge" style="display:none;" title="">LOADING</div>
+      </div>
+      <div class="topology">
+        <div class="topology-group" id="topoLocalGroup">
+          <div class="topology-group-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+            Local computer
+          </div>
+          <div class="topology-nodes">
+            <div class="service-node" id="nodeExtension">
+              <div class="service-node-header">
+                <span class="service-node-icon">Ex</span>
+                <span class="service-node-name">Extension</span>
+                <span class="svc-check" id="svcExtensionCheck"></span>
+              </div>
+              <div class="service-node-value" id="svcExtensionLocal">—</div>
+              <div class="service-node-value service-node-pid" id="svcExtensionPid">—</div>
+              <div class="service-node-footer">
+                <div class="info-popover" id="tunnelPopoverExtension">
+                  <button type="button" class="cloud-badge" id="cloudBadgeExtension" onclick="toggleInfoPopover('tunnelPopoverExtension')" title="Cloudflare tunnel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                    Cloudflare
+                  </button>
+                  <div class="info-popover-panel">
+                    <div class="hint">Public tunnel URL</div>
+                    <div class="copy-field" id="svcExtensionTunnel">—</div>
+                  </div>
+                </div>
+                <div class="service-actions" id="svcExtensionActions">—</div>
+              </div>
+            </div>
 
-        <div class="service-row">
-          <div class="service-name">Selenium <span class="svc-check" id="svcSeleniumCheck"></span></div>
-          <div class="service-value" id="svcSeleniumLocal">—</div>
-          <div class="service-value" id="svcSeleniumPid">—</div>
-          <div class="service-value" id="svcSeleniumTunnel">—</div>
-          <div class="service-actions" id="svcSeleniumActions">—</div>
+            <div class="service-node" id="nodeSelenium">
+              <div class="service-node-header">
+                <span class="service-node-icon">Se</span>
+                <span class="service-node-name">Selenium</span>
+                <span class="svc-check" id="svcSeleniumCheck"></span>
+              </div>
+              <div class="service-node-value" id="svcSeleniumLocal">—</div>
+              <div class="service-node-value service-node-pid" id="svcSeleniumPid">—</div>
+              <div class="service-node-footer">
+                <div class="info-popover" id="tunnelPopoverSelenium">
+                  <button type="button" class="cloud-badge" id="cloudBadgeSelenium" onclick="toggleInfoPopover('tunnelPopoverSelenium')" title="Cloudflare tunnel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                    Cloudflare
+                  </button>
+                  <div class="info-popover-panel">
+                    <div class="hint">Public tunnel URL</div>
+                    <div class="copy-field" id="svcSeleniumTunnel">—</div>
+                  </div>
+                </div>
+                <div class="service-actions" id="svcSeleniumActions">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:14px;">Browsers detected on this machine</div>
+          <div id="localBrowsers" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
         </div>
 
-        <div class="service-row">
-          <div class="service-name">Extension <span class="svc-check" id="svcExtensionCheck"></span></div>
-          <div class="service-value" id="svcExtensionLocal">—</div>
-          <div class="service-value" id="svcExtensionPid">—</div>
-          <div class="service-value" id="svcExtensionTunnel">—</div>
-          <div class="service-actions" id="svcExtensionActions">—</div>
-        </div>
-
-        <div class="service-row" id="svcProxyRow" style="display:none;">
-          <div class="service-name">Robot Proxy <span class="svc-check" id="svcProxyCheck"></span></div>
-          <div class="service-value" id="svcProxyLocal">—</div>
-          <div class="service-value" id="svcProxyPid">—</div>
-          <div class="service-value" id="svcProxyTunnel">—</div>
-          <div class="service-actions" id="svcProxyActions">—</div>
+        <div class="topology-branch" id="svcProxyRow">
+          <div class="topology-arrow">→</div>
+          <div class="service-node" id="nodeProxy" style="display:none;">
+            <div class="service-node-header">
+              <span class="service-node-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+              </span>
+              <span class="service-node-name">Robot Proxy</span>
+              <div class="info-popover" id="proxyMacInfoPopover" style="display:none;">
+                <button type="button" class="info-btn" onclick="toggleInfoPopover('proxyMacInfoPopover')" title="macOS requirement" aria-label="macOS requirement">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </button>
+                <div class="info-popover-panel">
+                  <div class="hint">On macOS, the Robot Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
+                </div>
+              </div>
+              <span class="svc-check" id="svcProxyCheck"></span>
+            </div>
+            <div class="service-node-value" id="svcProxyLocal">—</div>
+            <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
+            <div class="service-node-footer">
+              <div class="info-popover" id="tunnelPopoverProxy">
+                <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                  Cloudflare
+                </button>
+                <div class="info-popover-panel">
+                  <div class="hint">Public tunnel URL</div>
+                  <div class="copy-field" id="svcProxyTunnel">—</div>
+                </div>
+              </div>
+              <div class="service-actions" id="svcProxyActions">—</div>
+            </div>
+          </div>
+          <div class="topology-arrow" id="svcProxyArrow2" style="display:none;">→</div>
+          <div class="topology-internet">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            Internet
+          </div>
         </div>
       </div>
-      <div class="hint" id="svcProxyMacHint" style="display:none;">On macOS, the Robot Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
     </section>
     <div id="error" class="error"></div>
     <section class="card logs">
       <div class="label">Component logs</div>
       <div class="mode-tabs log-tabs">
         <button type="button" class="mode-tab active" data-tab="all" onclick="setLogTab('all')">All</button>
+        <button type="button" class="mode-tab" data-tab="runner" onclick="setLogTab('runner')">Runner</button>
         <button type="button" class="mode-tab" data-tab="selenium" onclick="setLogTab('selenium')">Selenium</button>
         <button type="button" class="mode-tab" data-tab="proxy" onclick="setLogTab('proxy')">Proxy</button>
         <button type="button" class="mode-tab" data-tab="extension" onclick="setLogTab('extension')">Extension</button>
@@ -625,6 +744,7 @@ function escapeHtml(value) {
 let selectedRobotName = '';
 let robotLoadedName = '';
 let robotLoadedData = null;
+let seleniumRunning = false;
 
 function updateRobotSelectionHint() {
   $('robotSelectionIcon').title = selectedRobotName
@@ -744,7 +864,8 @@ function browserNamesMatch(localName, robotBrowser) {
 }
 
 /** Colors each detected browser against the currently selected robot template: red when it's
- *  missing from this machine, dark green when it matches the robot's browser, neutral otherwise. */
+ *  missing from this machine, dark green when it matches the robot's browser AND Selenium is
+ *  running (i.e. it's actually the browser in use), neutral otherwise. */
 function renderLocalBrowsers() {
   const robotBrowser = robotLoadedData && robotLoadedData.browser;
   $('localBrowsers').innerHTML = localBrowsersData.map(b => {
@@ -753,7 +874,7 @@ function renderLocalBrowsers() {
     if (!b.available) {
       cls += ' robot-pill--browser-missing';
       title = 'Not found on this machine';
-    } else if (robotBrowser && browserNamesMatch(b.name, robotBrowser)) {
+    } else if (seleniumRunning && robotBrowser && browserNamesMatch(b.name, robotBrowser)) {
       cls += ' robot-pill--browser-match';
       title = "Matches the selected robot's browser";
     }
@@ -904,7 +1025,7 @@ async function selectRobot(name) {
   updateRobotSelectionHint();
 }
 
-// ---- Log tabs: All / Selenium / Proxy / Extension --------------------------------
+// ---- Log tabs: All / Runner / Selenium / Proxy / Extension ------------------------
 // The extension shares Selenium's own stdout, but tags every line it emits with the fixed
 // "[crb-ext]" marker (see cerberus-robot-extension's log4j2.xml pattern), so that's what
 // separates it from Selenium's own log lines rather than the process source.
@@ -915,9 +1036,10 @@ function classifyLogLine(line) {
   if (line.includes('[crb-ext]')) return 'extension';
   const match = line.match(/\[([\w-]+)\]/);
   const source = match ? match[1] : '';
-  if (source === 'selenium') return 'selenium';
-  if (source === 'extension') return 'extension';
+  if (source === 'selenium' || source === 'cloudflared') return 'selenium';
+  if (source === 'extension' || source === 'cloudflared-extension') return 'extension';
   if (source === 'robotproxy' || source === 'cloudflared-proxy') return 'proxy';
+  if (source === 'runner' || source === 'callback') return 'runner';
   return 'other';
 }
 
@@ -1006,12 +1128,15 @@ async function action(name) {
   if (name === 'start') robotSyncApplied = false;
   await fetch('/api/' + name, {method:'POST'}); await refresh();
 }
-function setServiceCheck(id, ok) {
+function setServiceCheck(id, ok, pending) {
   const el = $(id);
-  el.textContent = '✓';
-  el.classList.toggle('show', ok);
-  el.title = ok ? 'Running' : '';
+  el.classList.toggle('pending', !!pending);
+  el.classList.toggle('show', !pending && ok);
+  el.title = pending ? 'Starting/stopping…' : (ok ? 'Running' : 'Stopped');
 }
+
+function setNodeUp(id, up) { $(id).classList.toggle('up', up); }
+function setCloudBadgeConnected(id, url) { $(id).classList.toggle('connected', !!url); }
 
 const EXTERNAL_LINK_ICON_PATH = '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>';
 const STOP_ICON_PATH = '<rect width="14" height="14" x="5" y="5" rx="2"/>';
@@ -1066,18 +1191,29 @@ async function refresh() {
     const starting = status.state === 'STARTING';
     setServiceValue('svcSeleniumLocal', status.seleniumUrl, '—', starting, true);
     setServiceValue('svcSeleniumPid', status.seleniumPid, '—', starting);
-    setServiceValue('svcSeleniumTunnel', status.tunnelUrl, 'Not connected', starting);
+    setServiceValue('svcSeleniumTunnel', status.tunnelUrl, 'Not connected', starting, true);
     setServiceValue('svcExtensionLocal', status.extensionUrl, '—', starting);
     setServiceValue('svcExtensionPid', status.extensionPid, '—', starting);
-    setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting);
-    $('svcProxyRow').style.display = status.robotproxyEnabled ? 'contents' : 'none';
-    $('svcProxyMacHint').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'block' : 'none';
+    setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting, true);
+    $('nodeProxy').style.display = status.robotproxyEnabled ? '' : 'none';
+    $('svcProxyArrow2').style.display = status.robotproxyEnabled ? '' : 'none';
+    $('proxyMacInfoPopover').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'inline-flex' : 'none';
     setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
-    setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting);
-    setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl);
-    setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl);
-    setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl);
+    setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
+    const globalTransitioning = ['STARTING', 'STOPPING'].includes(status.state);
+    setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl, globalTransitioning || !!status.seleniumBusy);
+    setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl, globalTransitioning || !!status.extensionBusy);
+    setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl, globalTransitioning || !!status.robotproxyBusy);
+    const seleniumNowRunning = !!status.seleniumPid;
+    if (seleniumNowRunning !== seleniumRunning) { seleniumRunning = seleniumNowRunning; renderLocalBrowsers(); }
+    setNodeUp('nodeSelenium', !!status.seleniumPid);
+    setNodeUp('nodeExtension', !!status.extensionPid);
+    setNodeUp('nodeProxy', !!status.robotproxyPid);
+    $('topoLocalGroup').classList.toggle('up', !!status.seleniumPid && !!status.extensionPid);
+    setCloudBadgeConnected('cloudBadgeSelenium', status.tunnelUrl);
+    setCloudBadgeConnected('cloudBadgeExtension', status.extensionTunnelUrl);
+    setCloudBadgeConnected('cloudBadgeProxy', status.proxyTunnelUrl);
 
     const ready = status.state === 'READY';
     setServiceActions('svcSelenium', ready, !!status.seleniumPid, !!status.seleniumBusy);
