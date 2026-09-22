@@ -12,9 +12,9 @@
     "pack:mac": "electron-builder --mac --dir",
     "pack:win": "electron-builder --win --dir",
     "pack:linux": "electron-builder --linux --dir",
-    "release:mac": "electron-builder --mac",
-    "release:win": "electron-builder --win",
-    "release:linux": "electron-builder --linux"
+    "release:mac": "electron-builder --mac --publish never",
+    "release:win": "electron-builder --win --publish never",
+    "release:linux": "electron-builder --linux --publish never"
   },
   "build": {
     "appId": "org.cerberus.localrunner",
