@@ -4,6 +4,7 @@
   "private": true,
   "description": "Local Selenium execution bridge for Cerberus - Electron app.",
   "main": "src/main.js",
+  "author": "Cerberus <bcivel@cerberus-testing.com>",
   "scripts": {
     "start": "electron run-dev.js",
     "start:real": "CRB_MOCK=false electron run-dev.js",
