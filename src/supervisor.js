@@ -335,9 +335,9 @@ class ProcessSupervisor {
   }
 
   javaBinary() {
-    const javaHome = process.env.JAVA_HOME;
-    if (!javaHome) throw new Error('JAVA_HOME is not set - required to launch the bundled Selenium/Extension/Robot Proxy jars');
-    return path.join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+    const javaHome = this.config.component('java.home');
+    const binary = path.join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+    return this.requireFile(binary, 'Bundled Java runtime');
   }
 
   requireFile(filePath, description) {

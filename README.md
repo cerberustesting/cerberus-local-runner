@@ -15,9 +15,10 @@ it's built.
 
 ## Prerequisites
 
-- Node.js 20+ and npm, to run/build the app itself;
-- JDK 21 on `PATH` or `JAVA_HOME` set, to launch the real (non-mock) Selenium/Extension/Robot
-  Proxy jars - these are still plain Java processes, spawned like any other child process;
+- Node.js 20+ and npm, to run/build the app itself. `npm run fetch-deps` bundles its own Temurin
+  JRE 21 into `vendor/jre` (packaged app: the resources root) to launch the real (non-mock)
+  Selenium/Extension/Robot Proxy jars - these are still plain Java processes, spawned like any
+  other child process, but no system-installed JDK/JAVA_HOME is required;
 - on macOS, `brew install mitmproxy` separately if you enable the Robot Proxy: mitmproxy.app is a
   code-signed Developer ID bundle that `electron-builder`'s re-signing pass would break the same
   way `jpackage`'s did, so it's never bundled there. The app's UI shows this reminder when the

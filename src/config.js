@@ -13,6 +13,9 @@ function isWindows() {
 function defaults() {
   return {
     'ui.port': '18080',
+    // Bundled by fetch-dependencies.js (vendor/jre in dev, packaged app's resources root in
+    // prod) - a whole directory, not a single file, but resolved the same way via component().
+    'java.home': 'jre',
     'selenium.port': '4444',
     'selenium.jar': 'selenium-server.jar',
     'extension.jar': 'cerberus-extension.jar',

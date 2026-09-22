@@ -9,10 +9,15 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const { execFileSync } = require('child_process');
 
 const repoRoot = path.join(__dirname, '..');
 const vendorDir = path.join(repoRoot, 'vendor');
 const robotProxyEnabled = process.env.CERBERUS_ROBOT_PROXY === 'true';
+
+// Temurin's mac archive wraps the JRE in a macOS bundle layout (Contents/Home) - Windows/Linux
+// archives don't, their extracted top-level folder is JAVA_HOME directly.
+const JRE_HOME_SUBPATH = { mac: ['Contents', 'Home'], windows: [], linux: [] };
 
 const OS_KEY = process.env.CRB_BUILD_OS || { darwin: 'mac', win32: 'windows', linux: 'linux' }[process.platform];
 if (!OS_KEY) {
@@ -68,6 +73,34 @@ function download(url, destination) {
   });
 }
 
+// Extracts the pinned Temurin JRE archive into vendor/jre - config.js's 'java.home' default
+// expects a directory there, not a single file, so this can't go through the plain-copy FILES
+// loop above. `tar -xf` (bsdtar) reads zip as readily as tar.gz and ships on Windows/macOS/Linux
+// by default, so one extraction path covers every OS_KEY without a zip/tar-gz npm dependency.
+async function installJre(manifest) {
+  const url = manifest.jre;
+  if (!url) throw new Error(`Missing dependency 'jre' in ${manifestFile}`);
+
+  const archivePath = path.join(vendorDir, `jre-download.${OS_KEY === 'windows' ? 'zip' : 'tar.gz'}`);
+  console.log(`Fetching jre <- ${url}`);
+  await download(url, archivePath);
+
+  const extractDir = path.join(vendorDir, '.jre-extract');
+  fs.rmSync(extractDir, { recursive: true, force: true });
+  fs.mkdirSync(extractDir, { recursive: true });
+  execFileSync('tar', ['-xf', archivePath, '-C', extractDir]);
+
+  const [topLevelName] = fs.readdirSync(extractDir);
+  const homeDir = path.join(extractDir, topLevelName, ...JRE_HOME_SUBPATH[OS_KEY]);
+
+  const jreDir = path.join(vendorDir, 'jre');
+  fs.rmSync(jreDir, { recursive: true, force: true });
+  fs.renameSync(homeDir, jreDir);
+
+  fs.rmSync(extractDir, { recursive: true, force: true });
+  fs.rmSync(archivePath, { force: true });
+}
+
 async function main() {
   if (!fs.existsSync(manifestFile)) throw new Error(`Missing dependency manifest: ${manifestFile}`);
   const manifest = parseManifest(fs.readFileSync(manifestFile, 'utf-8'));
@@ -82,6 +115,7 @@ async function main() {
     await download(url, destination);
     if (destName === 'cloudflared' || destName === 'mitmdump') fs.chmodSync(destination, 0o755);
   }
+  await installJre(manifest);
   console.log(`Done - dependencies in ${vendorDir}`);
 }
 

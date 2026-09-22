@@ -43,9 +43,9 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | File/dir | Role |
 |---|---|
 | `package.json` | App identity (`cerberus-local-runner`), npm scripts (`start`, `fetch-deps`, `pack:*` for unsigned local test builds, `release:*` for real installers), `electron-builder` config (icons, per-OS targets, `extraResources` mapping `vendor/` into the packaged app). |
-| `run-dev.js` | Dev entry point: forces an isolated config directory (`.dev-config/`) and `mock.mode`, so `npm start` can never clobber a real install's saved credentials or fight it over the same port. Auto-detects `JAVA_HOME` (best-effort per OS; only the macOS path has actually been exercised) for `CRB_MOCK=false` real runs. |
-| `scripts/fetch-dependencies.js` | Downloads the real Selenium/Extension/cloudflared/Robot Proxy/mitmdump binaries into `vendor/` (gitignored) per `dependencies.<os>.txt`. Same manifest format the old Java build used. |
-| `dependencies.mac.txt`, `dependencies.linux.txt`, `dependencies.windows.txt` | `key=url` manifests read by `fetch-dependencies.js`. Not Java-specific despite the name/history - still the right place to update a binary's version/source. |
+| `run-dev.js` | Dev entry point: forces an isolated config directory (`.dev-config/`) and `mock.mode`, so `npm start` can never clobber a real install's saved credentials or fight it over the same port. |
+| `scripts/fetch-dependencies.js` | Downloads the real Selenium/Extension/cloudflared/Robot Proxy/mitmdump binaries, plus a pinned Eclipse Temurin JRE 21 (extracted into `vendor/jre` - `javaBinary()` in `supervisor.js` launches jars from there, no system-installed JDK/`JAVA_HOME` needed), into `vendor/` (gitignored) per `dependencies.<os>.txt`. Same manifest format the old Java build used. |
+| `dependencies.mac.txt`, `dependencies.linux.txt`, `dependencies.windows.txt` | `key=url` manifests read by `fetch-dependencies.js`. Not Java-specific despite the name/history - still the right place to update a binary's version/source (including the bundled `jre` entry). |
 | `build-resources/icon.icns`, `icon.ico`, `icon.png` | The app icon actually used today (by `electron-builder` for packaging, and by `main.js` for the Dock/taskbar icon in dev) - a padded, rounded-card version of the logo, regenerated from `src/resources/cerberus_logo_light.png`. |
 | `.github/workflows/release.yml` | CI: on a `v*` tag (or manual dispatch), builds all three OSes (`npm ci` → `fetch-deps` → `release:<os>`) and uploads the installers to a GitHub Release. |
 
