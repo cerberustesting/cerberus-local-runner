@@ -1,92 +1,128 @@
 # Cerberus Local Runner
 
-This prototype packages a small Java supervisor as a native application (macOS, Linux, Windows). It starts:
+An Electron app that supervises, on your own machine:
 
 1. Selenium Server in standalone mode;
-2. the Cerberus Selenium extension through `--ext`;
-3. a temporary Cloudflare Quick Tunnel targeting the local Selenium endpoint.
+2. the Cerberus Selenium extension;
+3. a temporary Cloudflare Quick Tunnel targeting the local Selenium endpoint (and one for the
+   extension);
+4. optionally, the Cerberus Robot Proxy (and its own tunnel) when the selected robot template
+   asks for one.
 
-It then displays the state and logs at `http://127.0.0.1:18080`. Docker and a system-wide Java installation are not required by the packaged application.
+It displays state and logs at `http://127.0.0.1:18080` (opened for you in its own window - not
+the system browser). See [ARCHITECTURE.md](ARCHITECTURE.md) for a file-by-file breakdown of how
+it's built.
 
-## Prerequisites for building
+## Prerequisites
 
-- JDK 21 or newer on `PATH` (`java`, `javac`, `jar`, `jlink`, and `jpackage`), plus `curl` (macOS/Linux) or PowerShell with internet access (Windows);
-- network access to whatever URLs `dependencies.txt` points at;
-- on Windows, the WiX Toolset v3 on `PATH` for the `.exe` installer.
+- Node.js 20+ and npm, to run/build the app itself;
+- JDK 21 on `PATH` or `JAVA_HOME` set, to launch the real (non-mock) Selenium/Extension/Robot
+  Proxy jars - these are still plain Java processes, spawned like any other child process;
+- on macOS, `brew install mitmproxy` separately if you enable the Robot Proxy: mitmproxy.app is a
+  code-signed Developer ID bundle that `electron-builder`'s re-signing pass would break the same
+  way `jpackage`'s did, so it's never bundled there. The app's UI shows this reminder when the
+  Robot Proxy is enabled on macOS.
 
-Each build script must run on its target OS - `jpackage` does not cross-compile. Build once per OS (and once per Mac architecture if both Apple Silicon and Intel are required).
+## Run in development mode
+
+```bash
+npm install
+npm start
+```
+
+This forces an isolated config directory (`.dev-config/`) and `mock.mode=true` - Selenium/
+Extension/cloudflared are simulated, so nothing real gets downloaded or launched, and a real
+install's saved credentials/robot/tunnels can never be touched. It also runs on port `18099`
+instead of `18080`, so it can't fight a real running instance over the same port.
+
+Other dev entry points:
+
+```bash
+# Real Selenium/Extension/cloudflared/Robot Proxy binaries (from vendor/, see below), still on
+# the isolated port/config.
+npm run start:real
+
+# Real binaries, on port 18080 - required for OAuth sign-in, since Keycloak's
+# "cerberus-local-runner" client only has http://127.0.0.1:18080/oauth/callback registered as a
+# valid redirect_uri. Only safe to run when the real packaged app isn't also running.
+npm run start:oauth
+```
 
 ## Dependency manifest
 
-`dependencies.<os>.txt` (repo root - one file per OS: `dependencies.mac.txt`, `dependencies.linux.txt`, `dependencies.windows.txt`) declares every third-party binary that OS's build script fetches, one `<key>=<url>` line per dependency. Each build script only reads its own manifest and looks up the keys it needs (e.g. `seleniumServer`, `cloudflared`), saving the download under its own fixed destination filename - the one the app expects. Only the `url` side ever needs updating when a dependency's version or source changes, and it can point anywhere reachable with `curl`/`Invoke-WebRequest` (this delivery server, an artifact registry, or a public release page), whatever filename the source actually uses. See the comments at the top of `dependencies.mac.txt` for the full format.
+`dependencies.<os>.txt` (repo root - one file per OS) declares every third-party binary the app
+needs, one `<key>=<url>` line per dependency. `npm run fetch-deps` reads the manifest matching the
+current OS and downloads each into `vendor/` (gitignored, never committed) under the filename
+`config.js` expects. Only the `url` side ever needs updating when a dependency's version or
+source changes - it can point anywhere reachable with a plain GET (this delivery server, an
+artifact registry, a public release page). See the comments at the top of `dependencies.mac.txt`
+for the full format.
 
-`cerberusRobotProxy`, `mitmdumpLinux` and `mitmdumpWindows` are only downloaded when `CERBERUS_ROBOT_PROXY=true` (Robot Proxy feature). On macOS, `mitmdump` is deliberately **not** bundled even then: `jpackage`'s ad-hoc re-signing pass breaks mitmproxy.app's own already-signed binaries (and re-signing it ourselves still gets it killed by the hardened runtime at launch). Run `brew install mitmproxy` on the Mac before enabling the Robot Proxy - the app's UI shows this reminder when the Robot Proxy is enabled on macOS.
+`cerberusRobotProxy` and `mitmdump` are only fetched when `CERBERUS_ROBOT_PROXY=true` is set in
+the environment (Robot Proxy feature). `mitmdump` is never fetched for macOS - see above.
+
+```bash
+npm run fetch-deps                        # Selenium, Extension, cloudflared only
+CERBERUS_ROBOT_PROXY=true npm run fetch-deps   # + Robot Proxy (+ mitmdump outside macOS)
+```
 
 ## Build the application
 
 ```bash
-# macOS
-chmod +x build-macos.sh
-./build-macos.sh
+npm ci
+npm run fetch-deps            # populate vendor/ first - electron-builder bundles whatever's in there
 
-# Linux
-chmod +x build-linux.sh
-./build-linux.sh
-
-# Windows (PowerShell)
-./build-windows.ps1
+npm run release:mac           # -> dist/*.dmg
+npm run release:linux         # -> dist/*.deb, dist/*.AppImage
+npm run release:win           # -> dist/*.exe (NSIS installer)
 ```
 
-Outputs:
+Each of these must run on its target OS (no cross-signing). `pack:mac`/`pack:win`/`pack:linux`
+are the same builds unpacked (`--dir`, no installer) for faster local iteration.
 
-- macOS: `dist/Cerberus Local Runner.app` and `dist/Cerberus Local Runner-1.0.1.dmg`
-- Linux: `dist/Cerberus Local Runner/` (app-image) and a `.deb` package
-- Windows: `dist/Cerberus Local Runner/` (app-image) and a `.exe` installer
-
-For an initial unsigned build, macOS Gatekeeper may require a right-click followed by **Open**. For wider distribution, sign and notarize the application. The build script supports `CERBERUS_MAC_SIGN_IDENTITY` when a Developer ID Application certificate is available.
+The app isn't code-signed yet on any platform (`mac.identity` is explicitly `null`). Until it is,
+macOS Gatekeeper requires a right-click → **Open** on first launch, and Windows SmartScreen will
+warn on the installer.
 
 ## Releasing
 
-Pushing a tag matching `v*` (e.g. `v1.0.1`) triggers `.github/workflows/release.yml`, which builds all three platforms (with the Robot Proxy feature bundled) and uploads the resulting `.dmg`/`.deb`/`.exe` to a GitHub Release named after the tag. The macOS job runs on `macos-14` (Apple Silicon) - unsigned, since `CERBERUS_MAC_SIGN_IDENTITY` isn't configured in CI.
-
-## Run in development mode
-
-The following command compiles and launches the application with simulated Selenium and Cloudflare processes:
-
-```bash
-chmod +x run-dev.sh
-./run-dev.sh
-```
-
-Open `http://127.0.0.1:18080`, then use **Start local runner** and **Stop**.
+Pushing a tag matching `v*` (e.g. `v1.0.1`) triggers `.github/workflows/release.yml`, which builds
+all three platforms (`npm ci` → `npm run fetch-deps` → `npm run release:<os>`, with
+`CERBERUS_ROBOT_PROXY=true`) and uploads the installers to a GitHub Release named after the tag.
 
 ## Configuration
 
-On first launch, the application creates:
+On first launch, the app creates a config file under the OS-appropriate app-data directory:
 
-```text
-~/Library/Application Support/Cerberus Local Runner/config.properties
-```
+- macOS: `~/Library/Application Support/Cerberus Local Runner/config.properties`
+- Windows: `%APPDATA%\Cerberus Local Runner\config.properties`
+- Linux: `$XDG_CONFIG_HOME/cerberus-local-runner/config.properties` (or `~/.config/...`)
 
-Relevant properties:
+`config.js`'s `defaults()` is the source of truth for every key and its default value; the
+notable ones:
 
 ```properties
 ui.port=18080
 selenium.port=4444
-selenium.jar=selenium-server.jar
-extension.jar=cerberus-extension.jar
-cloudflared.binary=cloudflared
+extension.port=6555
 cloudflared.mode=quick
+robotproxy.enabled=false
+robotproxy.port=8093
+mitmproxy.binary=mitmdump
 cerberus.callbackUrl=
 cerberus.callbackBearerToken=
 runner.id=
 autostart=false
-openBrowser=true
+mock.mode=false
 ```
 
-Relative component paths are resolved from the application directory. `runner.id` is generated automatically if empty.
+Relative component paths (`selenium.jar`, `cloudflared.binary`, etc.) are resolved from `vendor/`
+in dev, or the packaged app's own resources directory in production. `runner.id` is generated
+automatically if empty. `robotproxy.enabled` is toggled automatically by the UI when you pick a
+robot template whose executor asks for a proxy - not meant to be set by hand.
 
-When `cerberus.callbackUrl` is configured, the runner sends this JSON after the tunnel becomes ready:
+When `cerberus.callbackUrl` is configured, the runner POSTs this JSON once the tunnel becomes
+ready:
 
 ```json
 {
@@ -97,21 +133,34 @@ When `cerberus.callbackUrl` is configured, the runner sends this JSON after the 
 }
 ```
 
-The callback can be protected with `cerberus.callbackBearerToken`. For the production version, replace the static token with a short-lived token obtained through the authenticated Cerberus pairing flow.
+The callback can be protected with `cerberus.callbackBearerToken`.
 
 ## Named tunnel mode
 
-Quick Tunnels are useful for the prototype because they return a temporary random URL. A managed tunnel can be selected with:
+Quick Tunnels return a temporary random URL each time. A managed, fixed-hostname tunnel can be
+selected instead with:
 
 ```properties
 cloudflared.mode=named
-cloudflared.token=the-short-lived-or-managed-token
+cloudflared.token=the-managed-tunnel-token
 cloudflared.publicUrl=https://runner.example.com
+cloudflared.extensionPublicUrl=https://runner-extension.example.com
+cloudflared.proxyPublicUrl=https://runner-proxy.example.com
 ```
 
-The Cloudflare route must already map the public hostname to `http://127.0.0.1:4444`.
+The Cloudflare route(s) must already map each public hostname to the corresponding local port
+(Selenium, Extension, Robot Proxy). In this mode, a single shared `cloudflared` process serves
+every hostname server-side, so independently restarting one service only restarts its local
+process, never the tunnel.
+
+## Authentication
+
+Two modes, picked in the UI: a per-user API key (`X-API-KEY`), or OAuth Authorization Code + PKCE
+against Cerberus's Keycloak. Both are only ever verified against `/mcp`. OAuth sign-in opens in
+your system browser (so it can reuse an existing Cerberus session there), not in the app's own
+window; the callback is still handled locally at `/oauth/callback`.
 
 ## Important security limitation
 
-This first prototype exposes the Selenium endpoint through the tunnel. It must only be used with an authenticated Cloudflare route or a server-controlled, short-lived tunnel. The target architecture should move execution into the Local Runner and keep only an outbound WebSocket connection to Cerberus.
-
+This exposes the Selenium (and, if enabled, Robot Proxy) endpoint through a public tunnel. Use it
+only with an authenticated Cloudflare route or a server-controlled, short-lived tunnel.

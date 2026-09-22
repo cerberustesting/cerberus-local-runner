@@ -1100,9 +1100,18 @@ async function syncRobotOnCerberus(status) {
       executor.executorBrowserProxyHost = 'localhost';
       executor.executorBrowserProxyPort = '8888';
     }
+    // The Grid node here only ever registers as this machine's real OS - a robot cloned with a
+    // different platform (e.g. a Windows template picked while running on a Mac) would never
+    // match on session creation, failing fast with no useful error. Force it, and say so loudly
+    // since it silently changes what the cloned robot claims to be.
+    const runnerPlatform = status.runnerPlatform;
+    if (runnerPlatform && template.platform && template.platform.toUpperCase() !== runnerPlatform) {
+      alert(`This runner is on ${runnerPlatform}, but the "${template.robot}" template is set to ${template.platform}.\n\n`
+        + `The cloned "${targetName}" robot will be created as ${runnerPlatform} instead, or every test session would fail immediately.`);
+    }
     const body = {
       robot: targetName,
-      type: template.type, platform: template.platform, browser: template.browser, version: template.version,
+      type: template.type, platform: runnerPlatform || template.platform, browser: template.browser, version: template.version,
       isActive: true, userAgent: template.userAgent, screenSize: template.screenSize,
       profileFolder: template.profileFolder, extraParam: template.extraParam,
       acceptNotifications: template.acceptNotifications, isAcceptInsecureCerts: template.isAcceptInsecureCerts,

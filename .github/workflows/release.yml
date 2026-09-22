@@ -37,14 +37,15 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy)
+        run: npm run fetch-deps
       - name: Build
-        run: |
-          chmod +x build-macos.sh
-          ./build-macos.sh
+        run: npm run release:mac
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,30 +56,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy, mitmdump)
+        run: npm run fetch-deps
       - name: Build
-        run: |
-          chmod +x build-linux.sh
-          ./build-linux.sh
+        run: npm run release:linux
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.deb --repo "${{ github.repository }}" --clobber
+        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.deb dist/*.AppImage --repo "${{ github.repository }}" --clobber
 
   build-windows:
     needs: create-release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy, mitmdump)
+        run: npm run fetch-deps
       - name: Build
-        run: ./build-windows.ps1
+        run: npm run release:win
       - name: Upload to release
         shell: bash
         env:

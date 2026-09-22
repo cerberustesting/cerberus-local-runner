@@ -4,9 +4,12 @@
 *.bak
 .DS_Store
 .idea/
+node_modules/
+.dev-config/
 
 # Third-party build inputs (selenium/extension/robot-proxy jars, cloudflared, mitmproxy) -
-# fetch these per dependencies.txt, don't commit them here.
+# fetched into vendor/ by `npm run fetch-deps` per dependencies.<os>.txt, never committed here.
+/vendor/
 *.jar
 *.tar
 *.tar.gz

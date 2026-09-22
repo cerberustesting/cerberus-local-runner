@@ -1,0 +1,51 @@
+{
+  "name": "cerberus-local-runner",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Local Selenium execution bridge for Cerberus - Electron app.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron run-dev.js",
+    "start:real": "CRB_MOCK=false electron run-dev.js",
+    "start:oauth": "CRB_MOCK=false CRB_UI_PORT=18080 electron run-dev.js",
+    "fetch-deps": "node scripts/fetch-dependencies.js",
+    "pack:mac": "electron-builder --mac --dir",
+    "pack:win": "electron-builder --win --dir",
+    "pack:linux": "electron-builder --linux --dir",
+    "release:mac": "electron-builder --mac",
+    "release:win": "electron-builder --win",
+    "release:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "org.cerberus.localrunner",
+    "productName": "Cerberus Local Runner",
+    "files": [
+      "src/**/*"
+    ],
+    "extraResources": [
+      { "from": "vendor", "to": ".", "filter": ["**/*"] }
+    ],
+    "mac": {
+      "identity": null,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "icon": "build-resources/icon.icns"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build-resources/icon.ico"
+    },
+    "linux": {
+      "target": ["deb", "AppImage"],
+      "category": "Development",
+      "icon": "build-resources/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true
+  }
+}
