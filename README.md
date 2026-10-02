@@ -11,7 +11,8 @@ An Electron app that supervises, on your own machine:
 
 It displays state and logs at `http://127.0.0.1:18080` (opened for you in its own window - not
 the system browser). See [ARCHITECTURE.md](ARCHITECTURE.md) for a file-by-file breakdown of how
-it's built.
+it's built, and [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) for how Windows release builds
+are code-signed for free by the SignPath Foundation.
 
 ## Prerequisites
 

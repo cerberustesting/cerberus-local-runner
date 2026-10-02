@@ -2,6 +2,7 @@
 // and opens the UI (resources/index.html) in a BrowserWindow.
 'use strict';
 const { app, BrowserWindow, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const { RunnerConfig } = require('./config');
 const { CerberusAuthService } = require('./auth');
@@ -45,6 +46,24 @@ function createWindow() {
   });
 }
 
+// Only meaningful when packaged: a dev run isn't signed/published, so there's nothing to check.
+function configureAutoUpdater() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => console.log('Checking for update'));
+  autoUpdater.on('update-available', info => console.log(`Update available: ${info.version}`));
+  autoUpdater.on('update-not-available', () => console.log('No update available'));
+  autoUpdater.on('download-progress', progress => console.log(`Downloading update: ${progress.percent.toFixed(1)}%`));
+  // autoInstallOnAppQuit takes it from here - installed silently next time the app quits normally.
+  autoUpdater.on('update-downloaded', info => console.log(`Update ready, will install on quit: ${info.version}`));
+  autoUpdater.on('error', error => console.error('Update error:', error));
+
+  autoUpdater.checkForUpdatesAndNotify();
+}
+
 httpServer.listen(config.port(), '127.0.0.1', () => {
   console.log(`Cerberus Local Runner UI: http://127.0.0.1:${config.port()}`);
   console.log(`Configuration: ${config.configFile}`);
@@ -53,14 +72,23 @@ httpServer.listen(config.port(), '127.0.0.1', () => {
     // and only matters in dev (a packaged .app already gets it from Info.plist/CFBundleIconFile).
     if (process.platform === 'darwin' && app.dock && !app.isPackaged) app.dock.setIcon(appIconPath);
     createWindow();
+    configureAutoUpdater();
     if (config.bool('autostart')) supervisor.startAsync();
   });
 });
 
+// electron-updater's autoInstallOnAppQuit hooks its own 'before-quit' listener to launch the
+// installer, which needs the app to actually reach quit - a forced app.exit(0) here would skip
+// that listener and silently drop any pending update.
+let quitting = false;
+
 app.on('before-quit', event => {
+  if (quitting) return;
+
   event.preventDefault();
+  quitting = true;
   supervisor.stop();
-  httpServer.close(() => app.exit(0));
+  httpServer.close(() => app.quit());
 });
 
 app.on('window-all-closed', () => app.quit());
