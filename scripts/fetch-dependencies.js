@@ -97,6 +97,10 @@ async function installJre(manifest) {
   fs.rmSync(jreDir, { recursive: true, force: true });
   fs.renameSync(homeDir, jreDir);
 
+  // Temurin ships some files read-only (e.g. the 0444 CDS archives lib/server/classes*.jsa);
+  // macOS codesign has to write a signature into each file and fails with "Permission denied".
+  if (OS_KEY === 'mac') execFileSync('chmod', ['-R', 'u+w', jreDir]);
+
   fs.rmSync(extractDir, { recursive: true, force: true });
   fs.rmSync(archivePath, { force: true });
 }
