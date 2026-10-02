@@ -11,6 +11,7 @@
     "start:real": "CRB_MOCK=false electron run-dev.js",
     "start:oauth": "CRB_MOCK=false CRB_UI_PORT=18080 electron run-dev.js",
     "fetch-deps": "node scripts/fetch-dependencies.js",
+    "sign-vendor": "node scripts/sign-vendor-natives.js",
     "pack:mac": "electron-builder --mac --dir",
     "pack:win": "electron-builder --win --dir",
     "pack:linux": "electron-builder --linux --dir",

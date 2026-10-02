@@ -37,6 +37,11 @@ jobs:
         run: npm ci
       - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy)
         run: npm run fetch-deps
+      - name: Sign native binaries embedded in the vendored jars
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run sign-vendor
       - name: Set application version
         env:
           TAG: ${{ needs.resolve-tag.outputs.tag }}
