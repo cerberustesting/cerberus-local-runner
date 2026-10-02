@@ -128,6 +128,12 @@ function setupSigning() {
   run('security', ['set-key-partition-list', '-S', 'apple-tool:,apple:', '-s', '-k', password, keychain]);
   fs.rmSync(p12);
 
+  // codesign can't resolve the identity from --keychain alone: the keychain must be on the user's
+  // search list (electron-builder does the same). `security` has no "add", so read then re-set it.
+  const previousList = run('security', ['list-keychains', '-d', 'user']).toString()
+    .split('\n').map((l) => l.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  run('security', ['list-keychains', '-d', 'user', '-s', keychain, ...previousList]);
+
   const listing = run('security', ['find-identity', '-v', '-p', 'codesigning', keychain]).toString();
   const match = listing.match(/([0-9A-F]{40}) "Developer ID Application:[^"]*"/);
   if (!match) throw new Error(`No "Developer ID Application" identity in CSC_LINK:\n${listing}`);
@@ -135,6 +141,7 @@ function setupSigning() {
     identity: match[1],
     keychain,
     cleanup() {
+      try { run('security', ['list-keychains', '-d', 'user', '-s', ...previousList]); } catch { /* best effort */ }
       try { run('security', ['delete-keychain', keychain]); } catch { /* already gone */ }
       fs.rmSync(dir, { recursive: true, force: true });
     },
