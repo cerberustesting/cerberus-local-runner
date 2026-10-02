@@ -17,23 +17,16 @@ env:
   CERBERUS_ROBOT_PROXY: 'true'
 
 jobs:
-  create-release:
+  resolve-tag:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - id: tag
         run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
-      - name: Create GitHub Release if it doesn't already exist
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --generate-notes
 
   build-macos:
-    needs: create-release
+    needs: resolve-tag
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -44,15 +37,30 @@ jobs:
         run: npm ci
       - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy)
         run: npm run fetch-deps
-      - name: Build
-        run: npm run release:mac
-      - name: Upload to release
+      - name: Set application version
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.dmg --repo "${{ github.repository }}" --clobber
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: npm version "${TAG#v}" --no-git-tag-version
+      - name: Build, sign and notarize
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run release:mac
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
 
   build-linux:
-    needs: create-release
+    needs: resolve-tag
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,15 +71,24 @@ jobs:
         run: npm ci
       - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy, mitmdump)
         run: npm run fetch-deps
+      - name: Set application version
+        env:
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: npm version "${TAG#v}" --no-git-tag-version
       - name: Build
         run: npm run release:linux
-      - name: Upload to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.deb dist/*.AppImage --repo "${{ github.repository }}" --clobber
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.blockmap
+            dist/latest-linux.yml
 
   build-windows:
-    needs: create-release
+    needs: resolve-tag
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,10 +99,39 @@ jobs:
         run: npm ci
       - name: Fetch vendored binaries (Selenium, extension, cloudflared, Robot Proxy, mitmdump)
         run: npm run fetch-deps
-      - name: Build
-        run: npm run release:win
-      - name: Upload to release
+      - name: Set application version
         shell: bash
         env:
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: npm version "${TAG#v}" --no-git-tag-version
+      - name: Build
+        run: npm run release:win
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+
+  publish-release:
+    needs: [resolve-tag, build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub Release if it doesn't already exist
+        env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.create-release.outputs.tag }}" dist/*.exe --repo "${{ github.repository }}" --clobber
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --generate-notes
+      - name: Upload all build outputs to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: gh release upload "$TAG" dist/* --repo "${{ github.repository }}" --clobber

@@ -2,6 +2,7 @@
   "name": "cerberus-local-runner",
   "version": "1.0.1",
   "private": true,
+  "license": "MIT",
   "description": "Local Selenium execution bridge for Cerberus - Electron app.",
   "main": "src/main.js",
   "author": "Cerberus <bcivel@cerberus-testing.com>",
@@ -24,23 +25,50 @@
       "src/**/*"
     ],
     "extraResources": [
-      { "from": "vendor", "to": ".", "filter": ["**/*"] }
+      {
+        "from": "vendor",
+        "to": ".",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cerberustesting",
+        "repo": "cerberus-local-runner"
+      }
     ],
     "mac": {
-      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "entitlements": "build-resources/entitlements.mac.plist",
+      "entitlementsInherit": "build-resources/entitlements.mac.plist",
+      "notarize": true,
       "icon": "build-resources/icon.icns"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build-resources/icon.ico"
     },
     "linux": {
-      "target": ["deb", "AppImage"],
+      "target": [
+        "deb",
+        "AppImage"
+      ],
       "category": "Development",
       "icon": "build-resources/icon.png"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^44.4.3",
