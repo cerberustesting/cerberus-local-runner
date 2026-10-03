@@ -1,5 +1,7 @@
 name: Build and release
 
+run-name: Build and release ${{ github.event.inputs.tag || github.ref_name }}
+
 on:
   push:
     tags:
