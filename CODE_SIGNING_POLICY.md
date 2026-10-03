@@ -1,9 +1,13 @@
 # Code Signing Policy
 
-Cerberus Local Runner's Windows release builds are code-signed using a certificate provided free
-of charge to this open source project by the [SignPath Foundation](https://signpath.org/),
-through the [SignPath.io](https://signpath.io/) platform. This page documents the governance
-SignPath requires from open source projects it signs for.
+Cerberus Local Runner is the official desktop companion of
+[Cerberus](https://github.com/cerberustesting/cerberus-core), the open source test automation
+platform (GPL-3.0). This repository is MIT-licensed and is a component of the Cerberus project.
+
+Its Windows release builds are code-signed using a certificate provided free of charge to the
+Cerberus open source project by the [SignPath Foundation](https://signpath.org/), through the
+[SignPath.io](https://signpath.io/) platform. This page documents the governance SignPath
+requires from open source projects it signs for.
 
 ## Team and roles
 
@@ -20,11 +24,15 @@ and on SignPath.
 
 ## What gets signed
 
-Only release artifacts built by this project's own CI (`.github/workflows/release.yml`) from this
-repository's own source code are ever submitted for signing. Vendored third-party binaries
+Only the Windows installer built by this repository's own CI (`.github/workflows/release.yml`)
+from this repository's own source code is ever submitted to SignPath for signing. Nothing built
+from any other Cerberus repository is signed under this project. Vendored third-party binaries
 (Selenium, the Cerberus Robot Extension/Proxy, cloudflared, the bundled JRE - see
-[ARCHITECTURE.md](ARCHITECTURE.md)) are never re-signed under this certificate; they keep
-whatever signature/license their own publisher provides.
+[ARCHITECTURE.md](ARCHITECTURE.md)) are never re-signed under the SignPath certificate; they
+keep whatever signature/license their own publisher provides.
+
+The macOS builds are not part of this policy: they are signed and notarized with the
+maintainers' own Apple Developer ID certificate, not through SignPath.
 
 ## Privacy
 
