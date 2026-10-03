@@ -22,6 +22,7 @@
   "build": {
     "appId": "org.cerberus.localrunner",
     "productName": "Cerberus Local Runner",
+    "artifactName": "${name}-${version}-${arch}.${ext}",
     "files": [
       "src/**/*"
     ],
