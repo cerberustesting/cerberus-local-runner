@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
+const { callService, ServiceCallError } = require('./service-caller');
 
 const RESOURCES_DIR = path.join(__dirname, 'resources');
 
@@ -70,7 +71,7 @@ function requirePost(req, res) {
   return true;
 }
 
-function createServer(config, supervisor, auth, robots) {
+function createServer(config, supervisor, auth, robots, cerberusApi) {
   supervisor.onChange = () => {}; // callers (main.js) may override to push live updates
 
   return http.createServer(async (req, res) => {
@@ -152,6 +153,19 @@ function createServer(config, supervisor, auth, robots) {
         }
       } else if (p.startsWith('/api/robots')) {
         await handleRobots(req, res, p, robots);
+      } else if (p === '/api/appservices/call') {
+        // Runs a service definition from this machine (enterprise-network access). The Services
+        // view's Test button uses it; Cerberus core is meant to trigger the same call later.
+        if (!requirePost(req, res)) return;
+        const body = JSON.parse(await readBody(req) || '{}');
+        try {
+          sendJson(res, 200, await callService(body.service, body.props));
+        } catch (exception) {
+          if (!(exception instanceof ServiceCallError)) throw exception;
+          sendJson(res, 400, { error: exception.message });
+        }
+      } else if (p.startsWith('/api/cerberus/')) {
+        await handleCerberus(req, res, p, url, cerberusApi);
       } else {
         send(res, 404, 'text/plain; charset=utf-8', 'Not found');
       }
@@ -159,6 +173,38 @@ function createServer(config, supervisor, auth, robots) {
       sendJson(res, 502, { error: exception.message || String(exception) });
     }
   });
+}
+
+// Only the whitelisted Cerberus calls the Run view needs - this is not a generic proxy.
+async function handleCerberus(req, res, p, url, cerberusApi) {
+  const remainder = p.slice('/api/cerberus/'.length);
+  const enc = encodeURIComponent;
+  const param = name => (url.searchParams.get(name) || '').trim();
+  let result;
+  if (req.method === 'GET' && remainder === 'applications') {
+    result = await cerberusApi.get('/api/public/applications');
+  } else if (req.method === 'GET' && remainder === 'tests') {
+    result = await cerberusApi.get('/api/public/tests');
+  } else if (req.method === 'GET' && remainder === 'testcases') {
+    if (param('application')) result = await cerberusApi.get('/api/public/testcases/application/' + enc(param('application')));
+    else if (param('test')) result = await cerberusApi.get('/api/public/testcases/' + enc(param('test')));
+    else { sendJson(res, 400, { error: 'application or test is required' }); return; }
+  } else if (req.method === 'GET' && (remainder === 'invariants/COUNTRY' || remainder === 'invariants/ENVIRONMENT')) {
+    result = await cerberusApi.get('/api/public/' + remainder);
+  } else if (req.method === 'POST' && remainder === 'run') {
+    result = await cerberusApi.post('/api/public/queuedexecutions', await readBody(req));
+  } else if (remainder === 'services' && req.method === 'GET') {
+    result = await cerberusApi.get('/api/public/services' + (param('application') ? '?application=' + enc(param('application')) : ''));
+  } else if (remainder === 'services' && req.method === 'POST') {
+    result = await cerberusApi.post('/api/public/services', await readBody(req));
+  } else if (remainder.startsWith('services/') && remainder.length > 'services/'.length && (req.method === 'GET' || req.method === 'PUT')) {
+    const path = '/api/public/services/' + enc(decodeURIComponent(remainder.slice('services/'.length)));
+    result = req.method === 'GET' ? await cerberusApi.get(path) : await cerberusApi.put(path, await readBody(req));
+  } else {
+    sendJson(res, 404, { error: 'not found' });
+    return;
+  }
+  send(res, result.status, 'application/json; charset=utf-8', result.body);
 }
 
 async function handleRobots(req, res, p, robots) {

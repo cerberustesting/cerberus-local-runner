@@ -7,6 +7,7 @@ const path = require('path');
 const { RunnerConfig } = require('./config');
 const { CerberusAuthService } = require('./auth');
 const { CerberusRobotService } = require('./robots');
+const { CerberusApiService } = require('./cerberus-api');
 const { ProcessSupervisor } = require('./supervisor');
 const { createServer } = require('./server');
 
@@ -23,7 +24,8 @@ const config = RunnerConfig.load(applicationDirectory);
 const auth = new CerberusAuthService(config);
 const robots = new CerberusRobotService(config, auth);
 const supervisor = new ProcessSupervisor(config);
-const httpServer = createServer(config, supervisor, auth, robots);
+const cerberusApi = new CerberusApiService(auth);
+const httpServer = createServer(config, supervisor, auth, robots, cerberusApi);
 
 let win;
 
@@ -32,6 +34,11 @@ function createWindow() {
     width: 1080,
     height: 860,
     icon: appIconPath,
+    // No native title bar (like Slack or Claude): the page draws its own drag regions, and the OS
+    // keeps only its window buttons - the traffic lights on macOS, a transparent overlay elsewhere.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' }
+      : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#64748b', height: 32 } }),
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
   win.loadURL(`http://127.0.0.1:${config.port()}/`);

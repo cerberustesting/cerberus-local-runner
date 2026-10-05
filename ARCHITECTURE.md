@@ -31,11 +31,13 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | `config.js` | Reads/writes `config.properties` (a flat `key=value` file, format unchanged from the Java app) under the OS-appropriate app-data directory; supplies defaults; resolves bundled-binary paths relative to `vendor/` (dev) or the packaged app's resources dir. |
 | `auth.js` | Cerberus authentication: API key mode, and OAuth Authorization Code + PKCE against Keycloak (token refresh, `/mcp` connection test). |
 | `robots.js` | Thin pass-through to Cerberus's robot endpoints (list/get/create/delete) using whichever credentials `auth.js` holds. |
+| `cerberus-api.js` | Thin pass-through to the Cerberus public API for the Run view (applications, tests, testcases, countries/environments, queued-execution launch). `server.js` exposes a whitelisted subset under `/api/cerberus/*`. |
+| `service-caller.js` | Executes a Cerberus application-service definition (REST only for now) from this machine, with `%property%` substitution, so APIs reachable only on the enterprise network can be called through the runner. Exposed as `POST /api/appservices/call`; used by the Services view's Test button, and the intended entry point for calls triggered from Cerberus core later. |
 | `browsers.js` | Detects locally installed Chrome/Firefox/Edge/Safari (informational only, shown in the UI). |
 | `supervisor.js` | The core: process state machine (STOPPED/STARTING/READY/STOPPING/ERROR), spawns/monitors Selenium, Extension, cloudflared tunnels and the Robot Proxy, independent per-service restart, log buffering. |
 | `server.js` | The local HTTP API (`/api/status`, `/api/start`, `/api/auth/*`, `/api/robots/*`, etc.) and static file serving for `resources/`. Also computes `runnerPlatform` (this machine's real OS, forced onto cloned robots so Selenium never rejects a session over a platform mismatch). |
 | `mock-component.js` | Stand-in process used instead of real Selenium/Extension/cloudflared when `mock.mode=true`, for fast local iteration without downloading real binaries. |
-| `resources/index.html` | The entire UI: single HTML file, no build step, no framework. Talks only to `server.js`'s API. |
+| `resources/index.html` | The entire UI: single HTML file, no build step, no framework. Once connected it shows a side menu with four views: Runner, Campaign / Run, Services (list/edit/create Cerberus app services via `/api/cerberus/services*`, plus a Test call), Logs. Talks only to `server.js`'s API. |
 | `resources/cerberus-logo.png`, `resources/cerberus_logo_light.png` | Logos used inside the UI itself (header, OAuth panel) - not the app icon (see `build-resources/`). |
 
 ### Build & packaging
