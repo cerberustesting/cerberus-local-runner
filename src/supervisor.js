@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const { RelayServer } = require('./relay');
+
 const MOCK_SCRIPT = path.join(__dirname, 'mock-component.js');
 const QUICK_TUNNEL_URL = /https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/;
 const MAX_LOG_LINES = 500;
@@ -34,6 +36,7 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
     this.error = '';
     this.selenium = null;
     this.extension = null;
@@ -41,6 +44,9 @@ class ProcessSupervisor {
     this.cloudflaredExtension = null;
     this.robotproxy = null;
     this.cloudflaredProxy = null;
+    this.relay = new RelayServer(config, message => this.log('relay', message));
+    this.cloudflaredRelay = null;
+    this.relayBusy = false;
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
@@ -54,6 +60,7 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
     this.onChange();
     this.startInternal().catch(() => {});
   }
@@ -99,6 +106,17 @@ class ProcessSupervisor {
         }
       }
 
+      // Additive feature: a relay that can't start (port taken, no tunnel URL in named mode...)
+      // must not take Selenium and the Extension down with it.
+      if (this.config.bool('relay.enabled')) {
+        try {
+          await this.bringUpRelay();
+        } catch (exception) {
+          this.log('runner', 'Relay start failed: ' + messageOf(exception));
+          this.stopRelayProcesses();
+        }
+      }
+
       this.state = 'READY';
       this.log('runner', 'Local runner is ready at ' + this.tunnelUrl);
       this.sendCallback('READY');
@@ -120,6 +138,8 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
+    this.relayBusy = false;
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
@@ -129,6 +149,7 @@ class ProcessSupervisor {
   }
 
   stopProcesses() {
+    this.stopRelayProcesses();
     this.destroy(this.cloudflaredProxy, 'cloudflared-proxy');
     this.destroy(this.robotproxy, 'robotproxy');
     this.destroy(this.cloudflaredExtension, 'cloudflared-extension');
@@ -296,6 +317,47 @@ class ProcessSupervisor {
       this.robotproxyBusy = false;
       this.onChange();
     }
+  }
+
+  async bringUpRelay() {
+    await this.relay.start();
+    this.log('runner', 'Relay is ready at ' + this.relay.localUrl());
+    if (this.namedTunnelMode()) {
+      this.relayTunnelUrl = this.config.get('cloudflared.relayPublicUrl');
+      if (!this.relayTunnelUrl) throw new Error('cloudflared.relayPublicUrl is required in named mode when relay.enabled is true');
+    } else {
+      this.log('runner', 'Starting Cloudflare Tunnel for Relay');
+      this.cloudflaredRelay = this.launch(this.cloudflaredCommand(this.relay.localUrl()), 'cloudflared-relay', url => { this.relayTunnelUrl = url; });
+      this.relayTunnelUrl = await this.waitForTunnel(this.cloudflaredRelay, null, () => this.relayTunnelUrl);
+      this.log('runner', 'Relay tunnel ready at ' + this.relayTunnelUrl);
+    }
+  }
+
+  stopRelayProcesses() {
+    this.destroy(this.cloudflaredRelay, 'cloudflared-relay');
+    this.cloudflaredRelay = null;
+    this.relay.stop();
+    this.relayTunnelUrl = '';
+  }
+
+  stopRelay() {
+    if (this.state !== 'READY' || this.relayBusy || !this.relay.isListening()) return;
+    this.log('runner', 'Stopping Relay');
+    this.stopRelayProcesses();
+    this.onChange();
+  }
+
+  startRelay() {
+    if (this.state !== 'READY' || this.relayBusy || this.relay.isListening() || !this.config.bool('relay.enabled')) return;
+    this.relayBusy = true;
+    this.onChange();
+    this.bringUpRelay()
+      .catch(exception => {
+        this.error = 'Relay start failed: ' + messageOf(exception);
+        this.log('runner', this.error);
+        this.stopRelayProcesses();
+      })
+      .finally(() => { this.relayBusy = false; this.onChange(); });
   }
 
   // ---- command builders -----------------------------------------------------------------
@@ -495,6 +557,12 @@ class ProcessSupervisor {
       seleniumBusy: this.seleniumBusy,
       extensionBusy: this.extensionBusy,
       robotproxyBusy: this.robotproxyBusy,
+      relayEnabled: this.config.bool('relay.enabled'),
+      relayUrl: this.relay.localUrl(),
+      relayTunnelUrl: this.relayTunnelUrl,
+      relayListening: this.relay.isListening(),
+      relayToken: this.config.get('relay.token'),
+      relayBusy: this.relayBusy,
     };
   }
 

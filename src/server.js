@@ -101,6 +101,7 @@ function createServer(config, supervisor, auth, robots, cerberusApi) {
           selenium: { start: () => supervisor.startSelenium(), stop: () => supervisor.stopSelenium() },
           extension: { start: () => supervisor.startExtension(), stop: () => supervisor.stopExtension() },
           robotproxy: { start: () => supervisor.startRobotProxy(), stop: () => supervisor.stopRobotProxy() },
+          relay: { start: () => supervisor.startRelay(), stop: () => supervisor.stopRelay() },
         };
         const fn = methods[service] && methods[service][action];
         if (!fn) { sendJson(res, 404, { error: 'not found' }); return; }
@@ -154,8 +155,8 @@ function createServer(config, supervisor, auth, robots, cerberusApi) {
       } else if (p.startsWith('/api/robots')) {
         await handleRobots(req, res, p, robots);
       } else if (p === '/api/appservices/call') {
-        // Runs a service definition from this machine (enterprise-network access). The Services
-        // view's Test button uses it; Cerberus core is meant to trigger the same call later.
+        // Runs a service definition from this machine (enterprise-network access) for the
+        // Services view's Test button. Cerberus core goes through the relay (relay.js) instead.
         if (!requirePost(req, res)) return;
         const body = JSON.parse(await readBody(req) || '{}');
         try {

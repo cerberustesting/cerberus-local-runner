@@ -26,6 +26,7 @@ function defaults() {
     'cloudflared.publicUrl': '',
     'cloudflared.proxyPublicUrl': '',
     'cloudflared.extensionPublicUrl': '',
+    'cloudflared.relayPublicUrl': '',
     'robotproxy.enabled': 'false',
     'robotproxy.jar': 'cerberus-robot-proxy.jar',
     'robotproxy.port': '8093',
@@ -33,6 +34,13 @@ function defaults() {
     // untouched - electron-builder's own re-signing pass can break it the same way jpackage's
     // did, so this stays a bare command name resolved via PATH unless pointed at an absolute path.
     'mitmproxy.binary': isWindows() ? 'mitmdump.exe' : 'mitmdump',
+    // The relay lets Cerberus core run HTTP calls from this machine (see relay.js). The token is
+    // generated on first load; allowedHosts is a comma-separated list of host patterns ("*" wildcard),
+    // empty meaning any host.
+    'relay.enabled': 'true',
+    'relay.port': '8094',
+    'relay.token': '',
+    'relay.allowedHosts': '',
     'cerberus.callbackUrl': '',
     'cerberus.callbackBearerToken': '',
     'runner.id': '',
@@ -110,6 +118,9 @@ class RunnerConfig {
     }
     if (!properties['runner.id'] || !properties['runner.id'].trim()) {
       properties['runner.id'] = 'local-' + crypto.randomUUID();
+    }
+    if (!properties['relay.token'] || !properties['relay.token'].trim()) {
+      properties['relay.token'] = crypto.randomBytes(24).toString('hex');
     }
     fs.writeFileSync(configFile, serializeProperties(properties));
     return new RunnerConfig(properties, configFile, applicationDirectory);
