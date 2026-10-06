@@ -1,20 +1,25 @@
-// The relay Cerberus core calls (through its own cloudflared tunnel) to have an HTTP request
-// executed from this machine - for APIs only reachable on the runner's network. Core builds the
-// final request (properties, auth, cookies already resolved) and this just sends it and returns
-// the raw outcome, so it is deliberately dumb. It listens on its own port because the UI server
-// (server.js) is unauthenticated and must never be exposed through a tunnel.
+// The single public entry point of the runner for Cerberus core (the "Proxy Service" of a robot
+// executor): one listener behind one cloudflared tunnel that
+//   - serves the relay: core resolves a service call itself (properties, auth, cookies) and has the
+//     final HTTP request executed from this machine, so APIs only reachable on the runner's network
+//     can be called. It is deliberately dumb: send the request, return the raw outcome.
+//   - forwards every other path (including WebSocket upgrades) untouched to the Robot Proxy when
+//     it is enabled, so core keeps talking to it exactly as before (/check, /startProxy, /getHar...).
+// It has its own port because the UI server (server.js) is unauthenticated and must never be tunneled.
 //
-// Contract (JSON over HTTP, `Authorization: Bearer <relay.token>` required on every route):
-//   GET  /check  -> 200 { ok, version, runnerId }
-//   POST /relay  <- { method, url, headers: {name: value | [values]}, bodyBase64?, followRedirects?,
-//                     timeoutMs?, acceptUnsignedSsl? }
-//                -> 200 { status, statusText, headers: [[name, value]...], bodyBase64, truncated,
-//                         durationMs, finalUrl }   (any status the *target* answered, 4xx/5xx included)
+// Relay contract (JSON over HTTP, `Authorization: Bearer <relay.token>` required on both routes;
+// the forwarded Robot Proxy paths keep their existing, unauthenticated behavior):
+//   GET  /relay/check -> 200 { ok, version, runnerId }
+//   POST /relay       <- { method, url, headers: {name: value | [values]}, bodyBase64?, followRedirects?,
+//                          timeoutMs?, acceptUnsignedSsl? }
+//                     -> 200 { status, statusText, headers: [[name, value]...], bodyBase64, truncated,
+//                              durationMs, finalUrl }   (any status the *target* answered, 4xx/5xx included)
 //   Relay-level failures are { error, code } with 400 invalid_request, 401 unauthorized,
 //   403 target_blocked, 413 request_too_large, 429 too_many_requests, 502 connect_failed,
-//   504 timeout. Response bodies are decompressed (no content-encoding/content-length headers).
+//   503 relay_stopped, 504 timeout. Response bodies are decompressed (no content-encoding/length).
 'use strict';
 const http = require('http');
+const net = require('net');
 const crypto = require('crypto');
 const { executeHttp, HttpExecError, isLoopbackOrUnspecified } = require('./http-executor');
 
@@ -51,10 +56,20 @@ class RelayServer {
     this.log = log;
     this.server = null;
     this.inFlight = 0;
+    this.active = true; // the Services view can pause the relay alone, the gateway stays up
   }
 
   isListening() {
     return !!this.server && this.server.listening;
+  }
+
+  /** True when /relay actually serves calls. */
+  isActive() {
+    return this.isListening() && this.active && this.config.bool('relay.enabled');
+  }
+
+  setActive(active) {
+    this.active = active;
   }
 
   start() {
@@ -62,7 +77,9 @@ class RelayServer {
     const token = this.config.get('relay.token');
     if (!token) return Promise.reject(new Error('relay.token is empty'));
     const server = http.createServer((req, res) => this.handle(req, res));
+    server.on('upgrade', (req, socket, head) => this.forwardUpgrade(req, socket, head));
     this.server = server;
+    this.active = true;
     return new Promise((resolve, reject) => {
       server.once('error', reject);
       server.listen(this.config.integer('relay.port'), '127.0.0.1', () => {
@@ -91,9 +108,14 @@ class RelayServer {
 
   async handle(req, res) {
     const path = (req.url || '').split('?')[0];
+    if (path !== '/relay' && path !== '/relay/check') {
+      this.forward(req, res);
+      return;
+    }
     try {
       if (!this.authorized(req)) throw new RelayError(401, 'unauthorized', 'Missing or invalid relay token');
-      if (path === '/check' && req.method === 'GET') {
+      if (!this.isActive()) throw new RelayError(503, 'relay_stopped', 'The relay is stopped on this runner');
+      if (path === '/relay/check' && req.method === 'GET') {
         return this.sendJson(res, 200, { ok: true, version: RELAY_VERSION, runnerId: this.config.get('runner.id') });
       }
       if (path === '/relay' && req.method === 'POST') {
@@ -110,6 +132,40 @@ class RelayServer {
       const error = exception instanceof RelayError ? exception : new RelayError(500, 'internal_error', exception.message || String(exception));
       this.sendJson(res, error.status, { error: error.message, code: error.code });
     }
+  }
+
+  robotProxyPort() {
+    return this.config.bool('robotproxy.enabled') ? this.config.integer('robotproxy.port') : 0;
+  }
+
+  // Everything that is not the relay belongs to the Robot Proxy: pass it through as-is.
+  forward(req, res) {
+    const port = this.robotProxyPort();
+    if (!port) return this.sendJson(res, 404, { error: 'Not found', code: 'not_found' });
+    const upstream = http.request({ host: '127.0.0.1', port, method: req.method, path: req.url, headers: req.headers }, response => {
+      res.writeHead(response.statusCode, response.headers);
+      response.pipe(res);
+    });
+    upstream.on('error', () => {
+      if (!res.headersSent) this.sendJson(res, 502, { error: 'The Robot Proxy is not running on this runner', code: 'robotproxy_down' });
+      else res.destroy();
+    });
+    res.on('close', () => upstream.destroy());
+    req.pipe(upstream);
+  }
+
+  forwardUpgrade(req, socket, head) {
+    const port = this.robotProxyPort();
+    if (!port) { socket.destroy(); return; }
+    const upstream = net.connect(port, '127.0.0.1', () => {
+      let raw = `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`;
+      for (let i = 0; i < req.rawHeaders.length; i += 2) raw += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`;
+      upstream.write(raw + '\r\n');
+      if (head && head.length) upstream.write(head);
+      socket.pipe(upstream).pipe(socket);
+    });
+    upstream.on('error', () => socket.destroy());
+    socket.on('error', () => upstream.destroy());
   }
 
   readJson(req) {

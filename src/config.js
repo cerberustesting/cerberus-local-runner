@@ -26,7 +26,6 @@ function defaults() {
     'cloudflared.publicUrl': '',
     'cloudflared.proxyPublicUrl': '',
     'cloudflared.extensionPublicUrl': '',
-    'cloudflared.relayPublicUrl': '',
     'robotproxy.enabled': 'false',
     'robotproxy.jar': 'cerberus-robot-proxy.jar',
     'robotproxy.port': '8093',
@@ -34,7 +33,9 @@ function defaults() {
     // untouched - electron-builder's own re-signing pass can break it the same way jpackage's
     // did, so this stays a bare command name resolved via PATH unless pointed at an absolute path.
     'mitmproxy.binary': isWindows() ? 'mitmdump.exe' : 'mitmdump',
-    // The relay lets Cerberus core run HTTP calls from this machine (see relay.js). The token is
+    // The relay lets Cerberus core run HTTP calls from this machine (see relay.js); its listener is
+    // also the public entry point in front of the Robot Proxy, behind the cloudflared.proxyPublicUrl
+    // tunnel in named mode. The token is
     // generated on first load; allowedHosts is a comma-separated list of host patterns ("*" wildcard),
     // empty meaning any host.
     'relay.enabled': 'true',

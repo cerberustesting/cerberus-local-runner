@@ -1544,7 +1544,7 @@ function renderLogs(logs) {
 // and POST /public/robots creating the robot + its capabilities + its executors in one call (both
 // proxied as-is by our own backend at /api/robots and /api/robots/{name}).
 let robotSyncApplied = false;
-let previousServiceBusy = {selenium: false, extension: false, robotproxy: false, relay: false};
+let previousServiceBusy = {selenium: false, extension: false, robotproxy: false};
 
 function toHttpScheme(url) {
   if (!url) return '';
@@ -2045,37 +2045,37 @@ async function refresh() {
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
     setServiceValue('svcRelayLocal', status.relayUrl, '—', starting);
-    setServiceValue('svcRelayState', status.relayListening ? 'Listening' : '', 'Stopped', starting);
-    setServiceValue('svcRelayTunnel', status.relayTunnelUrl, 'Not connected', starting, true);
+    setServiceValue('svcRelayState', status.relayActive ? 'Listening' : '', 'Paused', starting);
+    setServiceValue('svcRelayTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
     relayToken = status.relayToken || '';
     const globalTransitioning = ['STARTING', 'STOPPING'].includes(status.state);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl, globalTransitioning || !!status.seleniumBusy);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl, globalTransitioning || !!status.extensionBusy);
-    setServiceCheck('svcRelayCheck', !!status.relayListening && !!status.relayTunnelUrl, globalTransitioning || !!status.relayBusy);
+    setServiceCheck('svcRelayCheck', !!status.relayActive && !!status.proxyTunnelUrl, globalTransitioning);
     setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl, globalTransitioning || !!status.robotproxyBusy);
     const seleniumNowRunning = !!status.seleniumPid;
     if (seleniumNowRunning !== seleniumRunning) { seleniumRunning = seleniumNowRunning; renderLocalBrowsers(); }
     setNodeUp('nodeSelenium', !!status.seleniumPid);
     setNodeUp('nodeExtension', !!status.extensionPid);
     setNodeUp('nodeProxy', !!status.robotproxyPid);
-    setNodeUp('nodeRelay', !!status.relayListening);
+    setNodeUp('nodeRelay', !!status.relayActive);
     $('topoLocalGroup').classList.toggle('up', !!status.seleniumPid && !!status.extensionPid);
-    $('topoNetworkGroup').classList.toggle('up', (!status.robotproxyEnabled || !!status.robotproxyPid) && (!status.relayEnabled || !!status.relayListening));
+    $('topoNetworkGroup').classList.toggle('up', (!status.robotproxyEnabled || !!status.robotproxyPid) && (!status.relayEnabled || !!status.relayActive));
     setCloudBadgeConnected('cloudBadgeSelenium', status.tunnelUrl);
     setCloudBadgeConnected('cloudBadgeExtension', status.extensionTunnelUrl);
     setCloudBadgeConnected('cloudBadgeProxy', status.proxyTunnelUrl);
-    setCloudBadgeConnected('cloudBadgeRelay', status.relayTunnelUrl);
+    setCloudBadgeConnected('cloudBadgeRelay', status.proxyTunnelUrl);
 
     updateRunnerPill(status.state);
     const ready = status.state === 'READY';
     if (ready !== runnerReady) applyRunnerReady(ready);
     setServiceActions('svcSelenium', ready, !!status.seleniumPid, !!status.seleniumBusy);
     setServiceActions('svcExtension', ready, !!status.extensionPid, !!status.extensionBusy);
-    setServiceActions('svcRelay', ready && !!status.relayEnabled, !!status.relayListening, !!status.relayBusy);
+    setServiceActions('svcRelay', ready && !!status.relayEnabled, !!status.relayActive, false);
     setServiceActions('svcProxy', ready, !!status.robotproxyPid, !!status.robotproxyBusy);
     // A service that just finished an independent restart may have a brand-new tunnel URL -
     // force the next Cerberus sync so the robot's executor gets updated with it.
-    ['selenium', 'extension', 'robotproxy', 'relay'].forEach(key => {
+    ['selenium', 'extension', 'robotproxy'].forEach(key => {
       const busyNow = !!status[key + 'Busy'];
       if (previousServiceBusy[key] && !busyNow) robotSyncApplied = false;
       previousServiceBusy[key] = busyNow;
