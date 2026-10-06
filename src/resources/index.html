@@ -1588,7 +1588,7 @@ async function syncRobotOnCerberus(status) {
       // with the runner's token.
       executor.relayActive = true;
       executor.executorRelayHost = status.relayTunnelUrl.replace(/^https?:\/\//, '');
-      executor.executorRelayPort = '80';
+      executor.executorRelayPort = '443'; // https: the relay carries its token and the service calls' own credentials
       executor.executorRelayToken = status.relayToken;
     }
     // The Grid node here only ever registers as this machine's real OS - a robot cloned with a
