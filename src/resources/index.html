@@ -750,32 +750,6 @@
                   <div class="service-actions" id="svcProxyActions">—</div>
                 </div>
               </div>
-              <div class="service-node" id="nodeRelay" style="display:none;">
-                <div class="service-node-header">
-                  <span class="service-node-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
-                  </span>
-                  <span class="service-node-name">Relay</span>
-                  <span class="svc-check" id="svcRelayCheck"></span>
-                </div>
-                <div class="service-node-value" id="svcRelayLocal">—</div>
-                <div class="service-node-value" id="svcRelayState">—</div>
-                <div class="service-node-footer">
-                  <div class="info-popover" id="tunnelPopoverRelay">
-                    <button type="button" class="cloud-badge" id="cloudBadgeRelay" onclick="toggleInfoPopover('tunnelPopoverRelay')" title="Cloudflare tunnel">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                      Cloudflare
-                    </button>
-                    <div class="info-popover-panel">
-                      <div class="hint">Public tunnel URL</div>
-                      <div class="copy-field" id="svcRelayTunnel">—</div>
-                      <div class="hint" style="margin-top:8px;">Cerberus calls this relay with an access token</div>
-                      <button type="button" class="outline-btn" id="relayTokenCopy" onclick="copyRelayToken()">Copy access token</button>
-                    </div>
-                  </div>
-                  <div class="service-actions" id="svcRelayActions">—</div>
-                </div>
-              </div>
             </div>
           </div>
           <div class="topology-arrow" id="svcProxyArrow2" style="display:none;">→</div>
@@ -913,7 +887,6 @@
             <button type="button" class="seg-btn" data-tab="runner" onclick="setLogTab('runner')">Runner</button>
             <button type="button" class="seg-btn" data-tab="selenium" onclick="setLogTab('selenium')">Selenium</button>
             <button type="button" class="seg-btn" data-tab="proxy" onclick="setLogTab('proxy')">Proxy</button>
-            <button type="button" class="seg-btn" data-tab="relay" onclick="setLogTab('relay')">Relay</button>
             <button type="button" class="seg-btn" data-tab="extension" onclick="setLogTab('extension')">Extension</button>
           </div>
           <label class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="logSearch" placeholder="Search in logs…" data-i18n-placeholder="logs.search" oninput="renderLogs(lastLogs)"></label>
@@ -1444,13 +1417,12 @@ async function loadRobotByName(name) {
     $('robotLoadStatus').textContent = '';
     renderRobotComboLabel(name, robot);
     renderLocalBrowsers();
-    const proxyType = detectProxyType(robot);
 
-    // No manual toggle anymore: the Robot Proxy starts automatically whenever the template's
-    // own executor already asks for one.
+    // The Robot Proxy always runs: besides the browser proxy a template may ask for, it hosts the
+    // relay Cerberus core runs service calls through. (Also heals a config saved as disabled.)
     await fetch('/api/robotproxy/enable', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({enabled: proxyType !== 'NONE' ? 'true' : 'false'})
+      body: JSON.stringify({enabled: 'true'})
     });
   } catch (e) {
     $('robotLoadStatus').textContent = 'Failed to reach Cerberus';
@@ -1481,7 +1453,6 @@ function classifyLogLine(line) {
   if (source === 'selenium' || source === 'cloudflared') return 'selenium';
   if (source === 'extension' || source === 'cloudflared-extension') return 'extension';
   if (source === 'robotproxy' || source === 'cloudflared-proxy') return 'proxy';
-  if (source === 'relay' || source === 'cloudflared-relay') return 'relay';
   if (source === 'runner' || source === 'callback') return 'runner';
   return 'other';
 }
@@ -1544,7 +1515,7 @@ function renderLogs(logs) {
 // and POST /public/robots creating the robot + its capabilities + its executors in one call (both
 // proxied as-is by our own backend at /api/robots and /api/robots/{name}).
 let robotSyncApplied = false;
-let previousServiceBusy = {selenium: false, extension: false, robotproxy: false, relay: false};
+let previousServiceBusy = {selenium: false, extension: false, robotproxy: false};
 
 function toHttpScheme(url) {
   if (!url) return '';
@@ -1572,24 +1543,27 @@ async function syncRobotOnCerberus(status) {
       executor.executorExtensionHost = toHttpScheme(status.extensionTunnelUrl);
       executor.executorExtensionPort = '80';
     }
-    if (status.robotproxyEnabled && status.proxyTunnelUrl) {
+    if (status.proxyTunnelUrl) {
+      // The Robot Proxy's public URL is the executor's "Proxy Service" (Cerberus core administers
+      // the proxy through it)...
       executor.executorProxyServiceHost = status.proxyTunnelUrl.replace(/^https?:\/\//, '');
       executor.executorProxyServicePort = '80';
+      // ...and the relay Cerberus core runs this robot's service calls through, authenticated with
+      // the shared token. It is served by the same Robot Proxy, but is a separate setting: https
+      // here, because the relay carries that token and the calls' own credentials.
+      executor.relayActive = true;
+      executor.executorRelayHost = executor.executorProxyServiceHost;
+      executor.executorRelayPort = '443';
+      executor.executorRelayToken = status.relayToken;
+    }
+    if (status.proxyTunnelUrl && detectProxyType(template) !== 'NONE') {
+      // The browser proxy is independent of the relay: only when the template asks for one.
       executor.executorProxyType = 'MITMPROXY';
       // The browser Selenium launches always runs on this same machine as the robot-proxy's
       // mitmdump instance, so it's always reached at localhost:8888 - regardless of the tunnel
       // URL above (that one's for Cerberus to reach the robot-proxy's own REST control API).
       executor.executorBrowserProxyHost = 'localhost';
       executor.executorBrowserProxyPort = '8888';
-    }
-    if (status.relayEnabled && status.relayTunnelUrl) {
-      // The relay has its own address, separate from the Robot Proxy's Proxy Service above and
-      // from the browser proxy: Cerberus runs this robot's service calls through it, authenticated
-      // with the runner's token.
-      executor.relayActive = true;
-      executor.executorRelayHost = status.relayTunnelUrl.replace(/^https?:\/\//, '');
-      executor.executorRelayPort = '443'; // https: the relay carries its token and the service calls' own credentials
-      executor.executorRelayToken = status.relayToken;
     }
     // The Grid node here only ever registers as this machine's real OS - a robot cloned with a
     // different platform (e.g. a Windows template picked while running on a Mac) would never
@@ -1643,7 +1617,7 @@ const STOP_ICON_PATH = '<rect width="14" height="14" x="5" y="5" rx="2"/>';
 const START_ICON_PATH = '<polygon points="6 3 20 12 6 21 6 3"/>';
 
 /** Maps each Services row's element-id prefix to the /api/services/{name}/... path segment. */
-const SERVICE_API_NAME = {svcSelenium: 'selenium', svcExtension: 'extension', svcProxy: 'robotproxy', svcRelay: 'relay'};
+const SERVICE_API_NAME = {svcSelenium: 'selenium', svcExtension: 'extension', svcProxy: 'robotproxy'};
 
 /** Independent Stop/Start for a single service row: restarting just this one gives it a fresh
  *  PID and (outside of "named" tunnel mode, where a single shared tunnel process serves every
@@ -1656,15 +1630,6 @@ function setServiceActions(prefix, actionable, running, busy) {
   el.innerHTML = running
     ? `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','stop')" title="Stop">${iconSvg(STOP_ICON_PATH)}</button>`
     : `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','start')" title="Start">${iconSvg(START_ICON_PATH)}</button>`;
-}
-
-let relayToken = '';
-async function copyRelayToken() {
-  if (!relayToken) return;
-  try { await navigator.clipboard.writeText(relayToken); } catch (e) { return; }
-  const button = $('relayTokenCopy');
-  button.textContent = 'Copied';
-  setTimeout(() => { button.textContent = 'Copy access token'; }, 1500);
 }
 
 async function serviceAction(service, action) {
@@ -2045,46 +2010,37 @@ async function refresh() {
     setServiceValue('svcExtensionPid', status.extensionPid, '—', starting);
     setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting, true);
     $('nodeProxy').style.display = status.robotproxyEnabled ? '' : 'none';
-    $('nodeRelay').style.display = status.relayEnabled ? '' : 'none';
-    const networkVisible = !!(status.robotproxyEnabled || status.relayEnabled);
+    const networkVisible = !!status.robotproxyEnabled;
     $('topoNetworkGroup').style.display = networkVisible ? '' : 'none';
     $('svcProxyArrow2').style.display = networkVisible ? '' : 'none';
     $('proxyMacInfoPopover').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'inline-flex' : 'none';
     setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
-    setServiceValue('svcRelayLocal', status.relayUrl, '—', starting);
-    setServiceValue('svcRelayState', status.relayListening ? 'Listening' : '', 'Stopped', starting);
-    setServiceValue('svcRelayTunnel', status.relayTunnelUrl, 'Not connected', starting, true);
-    relayToken = status.relayToken || '';
     const globalTransitioning = ['STARTING', 'STOPPING'].includes(status.state);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl, globalTransitioning || !!status.seleniumBusy);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl, globalTransitioning || !!status.extensionBusy);
-    setServiceCheck('svcRelayCheck', !!status.relayListening && !!status.relayTunnelUrl, globalTransitioning || !!status.relayBusy);
     setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl, globalTransitioning || !!status.robotproxyBusy);
     const seleniumNowRunning = !!status.seleniumPid;
     if (seleniumNowRunning !== seleniumRunning) { seleniumRunning = seleniumNowRunning; renderLocalBrowsers(); }
     setNodeUp('nodeSelenium', !!status.seleniumPid);
     setNodeUp('nodeExtension', !!status.extensionPid);
     setNodeUp('nodeProxy', !!status.robotproxyPid);
-    setNodeUp('nodeRelay', !!status.relayListening);
     $('topoLocalGroup').classList.toggle('up', !!status.seleniumPid && !!status.extensionPid);
-    $('topoNetworkGroup').classList.toggle('up', (!status.robotproxyEnabled || !!status.robotproxyPid) && (!status.relayEnabled || !!status.relayListening));
+    $('topoNetworkGroup').classList.toggle('up', !!status.robotproxyPid);
     setCloudBadgeConnected('cloudBadgeSelenium', status.tunnelUrl);
     setCloudBadgeConnected('cloudBadgeExtension', status.extensionTunnelUrl);
     setCloudBadgeConnected('cloudBadgeProxy', status.proxyTunnelUrl);
-    setCloudBadgeConnected('cloudBadgeRelay', status.relayTunnelUrl);
 
     updateRunnerPill(status.state);
     const ready = status.state === 'READY';
     if (ready !== runnerReady) applyRunnerReady(ready);
     setServiceActions('svcSelenium', ready, !!status.seleniumPid, !!status.seleniumBusy);
     setServiceActions('svcExtension', ready, !!status.extensionPid, !!status.extensionBusy);
-    setServiceActions('svcRelay', ready && !!status.relayEnabled, !!status.relayListening, !!status.relayBusy);
     setServiceActions('svcProxy', ready, !!status.robotproxyPid, !!status.robotproxyBusy);
     // A service that just finished an independent restart may have a brand-new tunnel URL -
     // force the next Cerberus sync so the robot's executor gets updated with it.
-    ['selenium', 'extension', 'robotproxy', 'relay'].forEach(key => {
+    ['selenium', 'extension', 'robotproxy'].forEach(key => {
       const busyNow = !!status[key + 'Busy'];
       if (previousServiceBusy[key] && !busyNow) robotSyncApplied = false;
       previousServiceBusy[key] = busyNow;

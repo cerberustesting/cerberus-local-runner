@@ -1,10 +1,8 @@
 // Executes a Cerberus "application service" definition from this machine, so APIs that are only
-// reachable from the enterprise network can be called through the local runner. Used by the
-// Services view's Test button. Calls triggered by Cerberus core don't come through here: core
-// resolves the request itself and sends it to the relay (relay.js). Only REST is supported.
+// reachable from the enterprise network can be tested from the runner. Used by the Services
+// view's Test button. Calls Cerberus core runs through a runner go through the Robot Proxy's relay.
+// Only REST services are supported for now.
 'use strict';
-
-const { executeHttp, HttpExecError } = require('./http-executor');
 
 const CALL_TIMEOUT_MS = 30_000;
 const MAX_BODY_CHARS = 1_000_000;
@@ -55,27 +53,36 @@ function buildRequest(service, propList) {
 
 async function callService(service, propList) {
   const request = buildRequest(service, propList);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
   const started = Date.now();
   try {
-    const result = await executeHttp(
-      { method: request.method, url: request.url, headers: request.headers, body: request.body == null ? undefined : Buffer.from(request.body), followRedirects: request.followRedirects },
-      { timeoutMs: CALL_TIMEOUT_MS, acceptUnsignedSsl: false, maxBodyBytes: MAX_BODY_CHARS });
-    const headers = {};
-    result.headers.forEach(([name, value]) => { headers[name] = name in headers ? headers[name] + ', ' + value : value; });
+    const response = await fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      redirect: request.followRedirects ? 'follow' : 'manual',
+      signal: controller.signal,
+    });
+    const text = await response.text();
     return {
       request: { method: request.method, url: request.url, headers: request.headers, body: request.body || '' },
       response: {
-        status: result.status,
-        statusText: result.statusText,
-        headers,
-        body: result.body.toString('utf-8'),
-        truncated: result.truncated,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: text.length > MAX_BODY_CHARS ? text.slice(0, MAX_BODY_CHARS) : text,
+        truncated: text.length > MAX_BODY_CHARS,
       },
       durationMs: Date.now() - started,
     };
   } catch (exception) {
-    if (exception instanceof HttpExecError) throw new ServiceCallError(exception.message);
-    throw exception;
+    if (exception.name === 'AbortError') throw new ServiceCallError('Timed out after ' + CALL_TIMEOUT_MS / 1000 + 's');
+    // undici hides the real reason (DNS, refused, TLS...) in `cause`.
+    const cause = exception.cause && (exception.cause.code || exception.cause.message);
+    throw new ServiceCallError('Call failed: ' + exception.message + (cause ? ' (' + cause + ')' : ''));
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -32,9 +32,7 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | `auth.js` | Cerberus authentication: API key mode, and OAuth Authorization Code + PKCE against Keycloak (token refresh, `/mcp` connection test). |
 | `robots.js` | Thin pass-through to Cerberus's robot endpoints (list/get/create/delete) using whichever credentials `auth.js` holds. |
 | `cerberus-api.js` | Thin pass-through to the Cerberus public API for the Run view (applications, tests, testcases, countries/environments, queued-execution launch). `server.js` exposes a whitelisted subset under `/api/cerberus/*`. |
-| `service-caller.js` | Executes a Cerberus application-service definition (REST only for now) from this machine, with `%property%` substitution. Exposed as `POST /api/appservices/call` and used by the Services view's Test button only - calls triggered by Cerberus core go through the relay instead. |
-| `http-executor.js` | Sends one fully-built HTTP request: manual redirects, per-request TLS verification, response decompression, size/time limits, and a DNS-level guard that refuses the runner's own loopback services. Shared by `service-caller.js` and `relay.js`. |
-| `relay.js` | A dedicated HTTP listener (`relay.port`, default 8094, loopback only, bearer-token protected) behind its own cloudflared tunnel. Cerberus core resolves a service call itself and POSTs the final request to `/relay`; the runner executes it from this machine and returns status/headers/body. `/check` reports the relay version. It is separate from `server.js` because the UI server is unauthenticated and must never be tunneled. The JSON contract is documented at the top of the file. Config: `relay.enabled`, `relay.port`, `relay.token` (generated on first load), `relay.allowedHosts` (optional host patterns), `cloudflared.relayPublicUrl` (named mode). |
+| `service-caller.js` | Executes a Cerberus application-service definition (REST only for now) from this machine, with `%property%` substitution, so APIs reachable only on the enterprise network can be tested from the runner. Exposed as `POST /api/appservices/call`; used by the Services view's Test button. Calls Cerberus core runs through a runner are not handled here: they go through the relay hosted by the Robot Proxy (below). |
 | `browsers.js` | Detects locally installed Chrome/Firefox/Edge/Safari (informational only, shown in the UI). |
 | `supervisor.js` | The core: process state machine (STOPPED/STARTING/READY/STOPPING/ERROR), spawns/monitors Selenium, Extension, cloudflared tunnels and the Robot Proxy, independent per-service restart, log buffering. |
 | `server.js` | The local HTTP API (`/api/status`, `/api/start`, `/api/auth/*`, `/api/robots/*`, etc.) and static file serving for `resources/`. Also computes `runnerPlatform` (this machine's real OS, forced onto cloned robots so Selenium never rejects a session over a platform mismatch). |
@@ -61,6 +59,23 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | `.dev-config/` | Throwaway config directory used by `npm start` (holds **your current real Cerberus session** - OAuth tokens, selected robot, etc. - don't delete this casually). |
 | `node_modules/`, `dist/`, `build/`, `dependencies/` | npm packages, `electron-builder` output, and old Java build leftovers respectively. |
 | `recordings/` | Empty directory Selenium creates on its own next to wherever it's launched from; harmless, safe to delete, will reappear. |
+
+## Relay for Cerberus service calls
+
+The runner ships no proxy service of its own. The bundled Cerberus Robot Proxy (`cerberus-robot-proxy.jar`)
+hosts a `/relay` endpoint that lets Cerberus core run a service call from this machine, so APIs reachable
+only on the runner's network can be called from a remote Cerberus. The runner only packages and configures it:
+
+- it always starts the Robot Proxy and exposes it through its own cloudflared tunnel;
+- it generates `robotproxy.relayToken` (config.properties) on first load and passes it as `--relay.token`,
+  together with `--relay.blocked-local-ports` (the runner's own UI/Selenium/Extension ports, which a relayed
+  call must never reach) and `--relay.allowed-hosts` (`robotproxy.relayAllowedHosts`, optional);
+- when it creates the `local-runner-{name}` robot on Cerberus it sets the executor's relay fields
+  (`relayActive`, `executorRelayHost`/`Port` = the Robot Proxy tunnel on 443, `executorRelayToken`)
+  independently of the browser proxy (`executorProxyType`) and of the Proxy Service address
+  (`executorProxyServiceHost`/`Port`, used by core to administer the Robot Proxy).
+
+The relay's contract and security model are documented in the Robot Proxy's README.
 
 ## Removed
 
