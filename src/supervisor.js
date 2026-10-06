@@ -36,6 +36,7 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
     this.error = '';
     this.selenium = null;
     this.extension = null;
@@ -44,6 +45,8 @@ class ProcessSupervisor {
     this.robotproxy = null;
     this.cloudflaredProxy = null;
     this.relay = new RelayServer(config, message => this.log('relay', message));
+    this.cloudflaredRelay = null;
+    this.relayBusy = false;
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
@@ -57,6 +60,7 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
     this.onChange();
     this.startInternal().catch(() => {});
   }
@@ -91,18 +95,25 @@ class ProcessSupervisor {
         this.robotproxy = this.launch(this.robotproxyCommand(), 'robotproxy', null);
         await this.waitForPort(this.config.integer('robotproxy.port'), 'robotproxy', this.robotproxy);
         this.log('runner', 'Robot Proxy is ready at ' + this.robotproxyLocalUrl());
+
+        if (this.namedTunnelMode()) {
+          this.proxyTunnelUrl = this.config.get('cloudflared.proxyPublicUrl');
+          if (!this.proxyTunnelUrl) throw new Error('cloudflared.proxyPublicUrl is required in named mode when robotproxy.enabled is true');
+        } else {
+          this.log('runner', 'Starting Cloudflare Tunnel for Robot Proxy');
+          this.cloudflaredProxy = this.launch(this.cloudflaredCommand(this.robotproxyLocalUrl()), 'cloudflared-proxy', url => { this.proxyTunnelUrl = url; });
+          this.proxyTunnelUrl = await this.waitForTunnel(this.cloudflaredProxy, null, () => this.proxyTunnelUrl);
+        }
       }
 
-      // One public entry point (the executor's "Proxy Service") serves the relay and forwards to the
-      // Robot Proxy. The relay alone is additive and must not take Selenium and the Extension down
-      // with it; with the Robot Proxy enabled, though, core can't reach it without the gateway.
-      if (this.gatewayNeeded()) {
+      // Additive feature: a relay that can't start (port taken, no tunnel URL in named mode...)
+      // must not take Selenium and the Extension down with it.
+      if (this.config.bool('relay.enabled')) {
         try {
-          await this.bringUpGateway();
+          await this.bringUpRelay();
         } catch (exception) {
-          if (this.config.bool('robotproxy.enabled')) throw exception;
           this.log('runner', 'Relay start failed: ' + messageOf(exception));
-          this.stopGateway();
+          this.stopRelayProcesses();
         }
       }
 
@@ -127,6 +138,8 @@ class ProcessSupervisor {
     this.tunnelUrl = '';
     this.extensionTunnelUrl = '';
     this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
+    this.relayBusy = false;
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
@@ -136,13 +149,14 @@ class ProcessSupervisor {
   }
 
   stopProcesses() {
-    this.stopGateway();
-
+    this.stopRelayProcesses();
+    this.destroy(this.cloudflaredProxy, 'cloudflared-proxy');
     this.destroy(this.robotproxy, 'robotproxy');
     this.destroy(this.cloudflaredExtension, 'cloudflared-extension');
     this.destroy(this.cloudflared, 'cloudflared');
     this.destroy(this.extension, 'extension');
     this.destroy(this.selenium, 'selenium');
+    this.cloudflaredProxy = null;
     this.robotproxy = null;
     this.cloudflaredExtension = null;
     this.cloudflared = null;
@@ -267,6 +281,11 @@ class ProcessSupervisor {
 
   async stopRobotProxyInternal() {
     this.log('runner', 'Stopping Cerberus Robot Proxy');
+    if (!this.namedTunnelMode()) {
+      this.destroy(this.cloudflaredProxy, 'cloudflared-proxy');
+      this.cloudflaredProxy = null;
+      this.proxyTunnelUrl = '';
+    }
     this.destroy(this.robotproxy, 'robotproxy');
     this.robotproxy = null;
     this.robotproxyBusy = false;
@@ -286,7 +305,11 @@ class ProcessSupervisor {
       this.robotproxy = this.launch(this.robotproxyCommand(), 'robotproxy', null);
       await this.waitForPort(this.config.integer('robotproxy.port'), 'robotproxy', this.robotproxy);
       this.log('runner', 'Robot Proxy is ready at ' + this.robotproxyLocalUrl());
-      if (!this.relay.isListening()) await this.bringUpGateway();
+      if (!this.namedTunnelMode()) {
+        this.cloudflaredProxy = this.launch(this.cloudflaredCommand(this.robotproxyLocalUrl()), 'cloudflared-proxy', url => { this.proxyTunnelUrl = url; });
+        this.proxyTunnelUrl = await this.waitForTunnel(this.cloudflaredProxy, null, () => this.proxyTunnelUrl);
+        this.log('runner', 'Robot Proxy tunnel ready at ' + this.proxyTunnelUrl);
+      }
     } catch (exception) {
       this.error = 'Robot Proxy start failed: ' + messageOf(exception);
       this.log('runner', this.error);
@@ -296,45 +319,45 @@ class ProcessSupervisor {
     }
   }
 
-  gatewayNeeded() {
-    return this.config.bool('relay.enabled') || this.config.bool('robotproxy.enabled');
-  }
-
-  async bringUpGateway() {
+  async bringUpRelay() {
     await this.relay.start();
-    this.log('runner', 'Proxy Service gateway is ready at ' + this.relay.localUrl());
+    this.log('runner', 'Relay is ready at ' + this.relay.localUrl());
     if (this.namedTunnelMode()) {
-      this.proxyTunnelUrl = this.config.get('cloudflared.proxyPublicUrl');
-      if (!this.proxyTunnelUrl) throw new Error('cloudflared.proxyPublicUrl is required in named mode when the relay or the Robot Proxy is enabled');
+      this.relayTunnelUrl = this.config.get('cloudflared.relayPublicUrl');
+      if (!this.relayTunnelUrl) throw new Error('cloudflared.relayPublicUrl is required in named mode when relay.enabled is true');
     } else {
-      this.log('runner', 'Starting Cloudflare Tunnel for the Proxy Service');
-      this.cloudflaredProxy = this.launch(this.cloudflaredCommand(this.relay.localUrl()), 'cloudflared-proxy', url => { this.proxyTunnelUrl = url; });
-      this.proxyTunnelUrl = await this.waitForTunnel(this.cloudflaredProxy, null, () => this.proxyTunnelUrl);
-      this.log('runner', 'Proxy Service tunnel ready at ' + this.proxyTunnelUrl);
+      this.log('runner', 'Starting Cloudflare Tunnel for Relay');
+      this.cloudflaredRelay = this.launch(this.cloudflaredCommand(this.relay.localUrl()), 'cloudflared-relay', url => { this.relayTunnelUrl = url; });
+      this.relayTunnelUrl = await this.waitForTunnel(this.cloudflaredRelay, null, () => this.relayTunnelUrl);
+      this.log('runner', 'Relay tunnel ready at ' + this.relayTunnelUrl);
     }
   }
 
-  stopGateway() {
-    this.destroy(this.cloudflaredProxy, 'cloudflared-proxy');
-    this.cloudflaredProxy = null;
+  stopRelayProcesses() {
+    this.destroy(this.cloudflaredRelay, 'cloudflared-relay');
+    this.cloudflaredRelay = null;
     this.relay.stop();
-    this.proxyTunnelUrl = '';
+    this.relayTunnelUrl = '';
   }
 
-  // The relay is one function of the gateway: pausing it leaves the tunnel and the Robot Proxy
-  // forwarding untouched.
   stopRelay() {
-    if (this.state !== 'READY' || !this.relay.isActive()) return;
-    this.relay.setActive(false);
-    this.log('runner', 'Relay paused');
+    if (this.state !== 'READY' || this.relayBusy || !this.relay.isListening()) return;
+    this.log('runner', 'Stopping Relay');
+    this.stopRelayProcesses();
     this.onChange();
   }
 
   startRelay() {
-    if (this.state !== 'READY' || this.relay.isActive() || !this.config.bool('relay.enabled') || !this.relay.isListening()) return;
-    this.relay.setActive(true);
-    this.log('runner', 'Relay resumed');
+    if (this.state !== 'READY' || this.relayBusy || this.relay.isListening() || !this.config.bool('relay.enabled')) return;
+    this.relayBusy = true;
     this.onChange();
+    this.bringUpRelay()
+      .catch(exception => {
+        this.error = 'Relay start failed: ' + messageOf(exception);
+        this.log('runner', this.error);
+        this.stopRelayProcesses();
+      })
+      .finally(() => { this.relayBusy = false; this.onChange(); });
   }
 
   // ---- command builders -----------------------------------------------------------------
@@ -536,8 +559,10 @@ class ProcessSupervisor {
       robotproxyBusy: this.robotproxyBusy,
       relayEnabled: this.config.bool('relay.enabled'),
       relayUrl: this.relay.localUrl(),
-      relayActive: this.relay.isActive(),
+      relayTunnelUrl: this.relayTunnelUrl,
+      relayListening: this.relay.isListening(),
       relayToken: this.config.get('relay.token'),
+      relayBusy: this.relayBusy,
     };
   }
 
