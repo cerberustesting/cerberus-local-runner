@@ -723,35 +723,52 @@
                   <span class="service-node-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
                   </span>
-                  <span class="service-node-name">Robot Proxy</span>
+                  <span class="service-node-name">Web Proxy</span>
                   <div class="info-popover" id="proxyMacInfoPopover" style="display:none;">
                     <button type="button" class="info-btn" onclick="toggleInfoPopover('proxyMacInfoPopover')" title="macOS requirement" aria-label="macOS requirement">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                     </button>
                     <div class="info-popover-panel">
-                      <div class="hint">On macOS, the Robot Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
+                      <div class="hint">On macOS, the Web Proxy needs mitmproxy installed separately: run <code>brew install mitmproxy</code>, then restart the runner.</div>
                     </div>
                   </div>
                   <span class="svc-check" id="svcProxyCheck"></span>
                 </div>
                 <div class="service-node-value" id="svcProxyLocal">—</div>
                 <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
-                <div class="service-node-value" id="svcProxyRelay">—</div>
                 <div class="service-node-footer">
-                  <div class="info-popover" id="tunnelPopoverProxy">
-                    <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                      Cloudflare
-                    </button>
-                    <div class="info-popover-panel">
-                      <div class="hint">Public tunnel URL</div>
-                      <div class="copy-field" id="svcProxyTunnel">—</div>
-                      <div class="hint" style="margin-top:8px;">API relay (Cerberus service calls) goes through the same tunnel</div>
-                      <div class="copy-field" id="svcProxyRelayUrl">—</div>
-                      <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
-                    </div>
-                  </div>
+                  <span class="hint" title="The API relay is served by the same process: stopping the Web Proxy stops it too">shared process</span>
                   <div class="service-actions" id="svcProxyActions">—</div>
+                </div>
+              </div>
+
+              <div class="service-node" id="nodeRelay" style="display:none;">
+                <div class="service-node-header">
+                  <span class="service-node-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
+                  </span>
+                  <span class="service-node-name">API relay</span>
+                  <span class="svc-check" id="svcRelayCheck"></span>
+                </div>
+                <div class="service-node-value" id="svcRelayLocal">—</div>
+                <div class="service-node-value" id="svcRelayState">—</div>
+                <div class="service-node-footer">
+                  <span class="hint">service calls for Cerberus</span>
+                </div>
+              </div>
+            </div>
+            <div class="service-node-footer" id="networkTunnelRow">
+              <div class="info-popover" id="tunnelPopoverProxy">
+                <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel shared by the Web Proxy and the API relay">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                  Cloudflare
+                </button>
+                <div class="info-popover-panel">
+                  <div class="hint">Public tunnel URL (Web Proxy and API relay)</div>
+                  <div class="copy-field" id="svcProxyTunnel">—</div>
+                  <div class="hint" style="margin-top:8px;">API relay URL</div>
+                  <div class="copy-field" id="svcProxyRelayUrl">—</div>
+                  <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
                 </div>
               </div>
             </div>
@@ -2032,17 +2049,21 @@ async function refresh() {
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
     // The API relay is served by the Robot Proxy itself, behind the same tunnel.
     relayToken = status.relayToken || '';
-    $('svcProxyRelay').textContent = status.robotproxyPid ? 'API relay · ready' : 'API relay · stopped';
+    $('nodeRelay').style.display = status.robotproxyEnabled ? '' : 'none';
+    setServiceValue('svcRelayLocal', status.robotproxyUrl ? status.robotproxyUrl + '/relay' : '', '—', starting);
+    setServiceValue('svcRelayState', status.robotproxyPid ? 'Ready' : '', 'Stopped', starting);
     setServiceValue('svcProxyRelayUrl', status.proxyTunnelUrl ? status.proxyTunnelUrl + '/relay' : '', 'Not connected', starting);
     const globalTransitioning = ['STARTING', 'STOPPING'].includes(status.state);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl, globalTransitioning || !!status.seleniumBusy);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl, globalTransitioning || !!status.extensionBusy);
+    setServiceCheck('svcRelayCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl, globalTransitioning || !!status.robotproxyBusy);
     setServiceCheck('svcProxyCheck', !!status.robotproxyPid && !!status.proxyTunnelUrl, globalTransitioning || !!status.robotproxyBusy);
     const seleniumNowRunning = !!status.seleniumPid;
     if (seleniumNowRunning !== seleniumRunning) { seleniumRunning = seleniumNowRunning; renderLocalBrowsers(); }
     setNodeUp('nodeSelenium', !!status.seleniumPid);
     setNodeUp('nodeExtension', !!status.extensionPid);
     setNodeUp('nodeProxy', !!status.robotproxyPid);
+    setNodeUp('nodeRelay', !!status.robotproxyPid);
     $('topoLocalGroup').classList.toggle('up', !!status.seleniumPid && !!status.extensionPid);
     $('topoNetworkGroup').classList.toggle('up', !!status.robotproxyPid);
     setCloudBadgeConnected('cloudBadgeSelenium', status.tunnelUrl);
