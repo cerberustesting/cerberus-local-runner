@@ -563,6 +563,10 @@
     .log-level.INFO { color:#60a5fa; } .log-level.DEBUG { color:#c084fc; } .log-level.WARN { color:#fbbf24; } .log-level.ERROR { color:#f87171; }
     .log-src { color:#34d399; }
     .log-msg { white-space:pre-wrap; word-break:break-word; color:#e2e8f0; }
+    .log-stack { margin-top:2px; }
+    .log-stack summary { cursor:pointer; color:#94a3b8; font-size:12.5px; }
+    .log-stack summary:hover { color:#e2e8f0; }
+    .log-stack div { margin:4px 0 6px; padding:8px 12px; border-left:2px solid #334155; color:#94a3b8; font-size:12px; line-height:1.55; max-height:320px; overflow:auto; }
     .log-empty { color:#64748b; }
     @media (max-width:760px) { .log-row { grid-template-columns:1fr; } .page-head { flex-direction:column; align-items:flex-start; } }
 
@@ -1642,16 +1646,54 @@ function setLogTab(tab) {
   renderLogs(lastLogs);
 }
 
-// Lines look like "2026-10-04T12:00:00.000Z [source] message"; the level isn't recorded, so infer it.
+// Lines look like "2026-10-04T12:00:00.000Z [source] message". The level isn't recorded by the runner,
+// but each component prints its own: read that one (Spring "INFO 71924 ---", Selenium "17:41:18.580 INFO",
+// cloudflared "INF"). Only the runner's own messages, which carry none, are guessed from their wording -
+// guessing on words is what turned "0 transport error" in an INFO statistics line into an ERROR.
 let logsClearedBefore = '';
+const LOG_LEVELS = {TRACE: 'DEBUG', DEBUG: 'DEBUG', DBG: 'DEBUG', FINE: 'DEBUG', FINER: 'DEBUG', FINEST: 'DEBUG', CONFIG: 'INFO', INFO: 'INFO', INF: 'INFO',
+  WARN: 'WARN', WARNING: 'WARN', WRN: 'WARN', ERROR: 'ERROR', ERR: 'ERROR', SEVERE: 'ERROR', FATAL: 'ERROR', FTL: 'ERROR'};
+
+function detectLogLevel(source, message) {
+  let m = message.match(/^\S+\s+(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s+\d+\s+---/)               // Spring / log4j2 console layout
+    || message.match(/^\d\d:\d\d:\d\d\.\d+\s+(SEVERE|WARNING|WARN|INFO|CONFIG|FINER|FINEST|FINE|DEBUG)\b/) // Selenium
+    || message.match(/^\d{4}-\d\d-\d\dT[\d:.]+Z\s+(INF|WRN|ERR|DBG|FTL)\b/);                    // cloudflared
+  if (m) {
+    const level = LOG_LEVELS[m[1]];
+    // cloudflared prints its connectivity pre-check table at INF, failures included.
+    return level === 'INFO' && /\|\s+(ERROR:|.*\sFAIL\s)/.test(message) ? 'WARN' : level;
+  }
+  if (source === 'runner' || source === 'callback') {
+    return /\b(error|exception|failed|fatal)\b/i.test(message) ? 'ERROR' : /\b(warn|warning)\b/i.test(message) ? 'WARN' : 'INFO';
+  }
+  return 'INFO';
+}
+
 function parseLogLine(line) {
   const m = line.match(/^(\d{4}-\d\d-\d\dT(\d\d:\d\d:\d\d\.\d{3})Z|\S+)\s+\[([^\]]+)\]\s?([\s\S]*)$/);
   if (!m) return {iso: '', time: '', source: '', message: line, level: 'INFO'};
-  const message = m[4];
-  const level = /\b(error|exception|failed|fatal)\b/i.test(message) ? 'ERROR'
-    : /\b(warn|warning)\b/i.test(message) ? 'WARN'
-    : /\bdebug\b/i.test(message) ? 'DEBUG' : 'INFO';
-  return {iso: m[1], time: m[2] || '', source: m[3], message, level};
+  return {iso: m[1], time: m[2] || '', source: m[3], message: m[4], level: detectLogLevel(m[3], m[4])};
+}
+
+// A Java stack trace arrives as one log line per line of the trace (~100 of them): blank lines, the
+// exception header, "    at ...", "Caused by: ...", "... 42 more". They belong to the line before them.
+function isLogContinuation(message) {
+  return /^\s*$/.test(message) || /^\s+at\s/.test(message) || /^\s*(Caused by|Suppressed):/.test(message)
+    || /^\s*\.\.\. \d+ (more|common frames omitted)/.test(message) || /^[A-Za-z_$][\w.$]*(Exception|Error|Throwable)(:|$)/.test(message);
+}
+
+/** Folds the continuation lines into the row they belong to (same component); a lone one stays a row. */
+function groupLogRows(rows) {
+  const grouped = [];
+  for (const row of rows) {
+    const head = grouped[grouped.length - 1];
+    if (head && !head.orphan && head.source === row.source && isLogContinuation(row.message) && (head.details.length || !isLogContinuation(head.message))) {
+      head.details.push(row.message);
+    } else {
+      grouped.push({...row, details: []});
+    }
+  }
+  return grouped;
 }
 
 function visibleLogs(logs) {
@@ -1676,16 +1718,31 @@ function exportLogs() {
   URL.revokeObjectURL(link.href);
 }
 
+const openLogDetails = new Set(); // folded traces the user expanded, kept across the 1s refresh
+
+function logDetailsHtml(row) {
+  const lines = row.details.filter(l => l.trim()); // the blank lines around a trace carry nothing
+  if (!lines.length) return '';
+  const summary = (lines.find(l => l.trim() && !/^\s+at\s/.test(l)) || lines[0]).trim();
+  const key = row.iso + '|' + row.source + '|' + row.message.slice(0, 60);
+  return '<details class="log-stack" data-key="' + escapeHtml(key) + '"' + (openLogDetails.has(key) ? ' open' : '') + '>'
+    + '<summary>' + lines.length + ' lines - ' + escapeHtml(summary.length > 110 ? summary.slice(0, 110) + '…' : summary) + '</summary>'
+    + '<div>' + escapeHtml(lines.join('\n')) + '</div></details>';
+}
+
 function renderLogs(logs) {
   lastLogs = logs;
   const box = $('logs'), bottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-  const rows = visibleLogs(logs).map(parseLogLine);
+  const rows = groupLogRows(visibleLogs(logs).map(parseLogLine));
   box.innerHTML = rows.length
     ? rows.map(r => '<div class="log-row"><span class="log-time">' + escapeHtml(r.time) + '</span>'
         + '<span class="log-level ' + r.level + '">' + r.level + '</span>'
         + '<span class="log-src">[' + escapeHtml(r.source.toUpperCase()) + ']</span>'
-        + '<span class="log-msg">' + escapeHtml(r.message) + '</span></div>').join('')
+        + '<span class="log-msg">' + escapeHtml(r.message) + logDetailsHtml(r) + '</span></div>').join('')
     : '<div class="log-empty">' + escapeHtml(t('logs.empty')) + '</div>';
+  box.querySelectorAll('details.log-stack').forEach(d => d.addEventListener('toggle', () => {
+    if (d.open) openLogDetails.add(d.dataset.key); else openLogDetails.delete(d.dataset.key);
+  }));
   if (bottom) box.scrollTop = box.scrollHeight;
 }
 
