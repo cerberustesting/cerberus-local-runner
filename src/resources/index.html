@@ -274,6 +274,60 @@
     }
     .topology-internet svg { width:22px; height:22px; }
 
+
+    /* Services topology, top to bottom: Cerberus -> (Web box | API box) -> the Web. The middle row
+       wraps on narrow windows; the arrows belong to their column so they follow it. A box or arrow is
+       "up" only while something in it actually runs, since services can be started separately. */
+    .topo { display:flex; flex-direction:column; gap:0; }
+    /* Same neutral look as the Web box at the bottom: Cerberus is where the calls come from, not a
+       local service that is up or down. */
+    .topo-cerberus {
+      display:flex; align-items:center; justify-content:center; gap:14px; padding:14px 18px; border-radius:14px;
+      border:1.5px dashed var(--crb-new-border); color:var(--crb-text-muted);
+    }
+    .topo-cerberus-logo { height:34px; width:auto; }
+    .topo-cerberus-name { font-weight:700; font-size:15px; color:var(--crb-text); }
+    .topo-cerberus-url { font-size:12.5px; color:var(--crb-text-muted); overflow-wrap:anywhere; }
+    .topo-cols { display:flex; flex-wrap:wrap; column-gap:16px; align-items:stretch; }
+    .topo-col { display:flex; flex-direction:column; min-width:0; }
+    .topo-col-web { flex:3 1 560px; }
+    .topo-col-api { flex:1 1 260px; }
+    .topo-col > .topology-group { flex:1; }
+    .topo-web { flex-direction:row; width:100%; box-sizing:border-box; gap:10px; padding:14px; }
+    .flow-arrow {
+      position:relative; height:44px; display:flex; align-items:center; justify-content:center; color:var(--crb-grey-color);
+    }
+    .flow-arrow::before { content:''; position:absolute; top:2px; bottom:9px; left:50%; width:0; border-left:2px dashed currentColor; transform:translateX(-50%); }
+    .flow-arrow::after {
+      content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+      border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid currentColor;
+    }
+    .flow-arrow.active { color:var(--crb-green-color); }
+    .flow-arrow.active::before { border-left-style:solid; }
+    .flow-label {
+      position:relative; z-index:1; margin-left:150px; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600;
+      color:var(--crb-text-muted); background:var(--crb-new-bg); border:1px solid var(--crb-new-border); white-space:nowrap;
+    }
+
+    .flow-label-stacked, .group-note { display:none; }
+    .group-note { margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; }
+    .topo-cols { container-type:inline-size; }
+    /* Both columns need 836px side by side (560 + 260 + gap). Narrower, they stack, and an arrow
+       placed between the two boxes would read as a Web -> API flow. So: the Web box's outgoing arrow
+       is dropped, the API box's incoming arrow becomes a note in its header, and the API column's
+       outgoing arrow stands for both outgoing flows. */
+    @container (max-width: 835px) {
+      .topo-col-web > .flow-arrow:last-child { display:none; }
+      .topo-col-api > .flow-arrow:first-child { height:14px; }
+      .topo-col-api > .flow-arrow:first-child::before, .topo-col-api > .flow-arrow:first-child::after,
+      .topo-col-api > .flow-arrow:first-child .flow-label { display:none; }
+      .group-note { display:inline; }
+      .flow-label-wide { display:none; }
+      .flow-label-stacked { display:inline; }
+      .topo-col-api > .flow-arrow:last-child.any-active { color:var(--crb-green-color); }
+      .topo-col-api > .flow-arrow:last-child.any-active::before { border-left-style:solid; }
+    }
+
     .service-node {
       display:flex; flex-direction:column; gap:8px; min-width:180px; padding:12px 14px; border-radius:12px;
       background:var(--crb-new-bg); border:1.5px solid var(--crb-new-border); transition:border-color .2s ease;
@@ -653,71 +707,71 @@
         <span>Services</span>
         <div id="state" class="badge" style="display:none;" title="">LOADING</div>
       </div>
-      <div class="topology">
-        <div class="topology-group" id="topoLocalGroup">
-          <div class="topology-group-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
-            Local computer
+      <div class="topo">
+        <div class="topo-cerberus" id="topoCerberus">
+          <img src="/cerberus_logo_light.png" alt="Cerberus" class="topo-cerberus-logo brand-logo-light">
+          <img src="/cerberus-logo.png" alt="Cerberus" class="topo-cerberus-logo brand-logo-dark">
+          <div>
+            <div class="topo-cerberus-name">Cerberus Core</div>
+            <div class="topo-cerberus-url" id="topoCerberusUrl">—</div>
           </div>
-          <div class="topology-nodes">
-            <div class="service-node" id="nodeExtension">
-              <div class="service-node-header">
-                <span class="service-node-icon">Ex</span>
-                <span class="service-node-name">Extension</span>
-                <span class="svc-check" id="svcExtensionCheck"></span>
-              </div>
-              <div class="service-node-value" id="svcExtensionLocal">—</div>
-              <div class="service-node-value service-node-pid" id="svcExtensionPid">—</div>
-              <div class="service-node-footer">
-                <div class="info-popover" id="tunnelPopoverExtension">
-                  <button type="button" class="cloud-badge" id="cloudBadgeExtension" onclick="toggleInfoPopover('tunnelPopoverExtension')" title="Cloudflare tunnel">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                    Cloudflare
-                  </button>
-                  <div class="info-popover-panel">
-                    <div class="hint">Public tunnel URL</div>
-                    <div class="copy-field" id="svcExtensionTunnel">—</div>
-                  </div>
-                </div>
-                <div class="service-actions" id="svcExtensionActions">—</div>
-              </div>
-            </div>
-
-            <div class="service-node" id="nodeSelenium">
-              <div class="service-node-header">
-                <span class="service-node-icon">Se</span>
-                <span class="service-node-name">Selenium</span>
-                <span class="svc-check" id="svcSeleniumCheck"></span>
-              </div>
-              <div class="service-node-value" id="svcSeleniumLocal">—</div>
-              <div class="service-node-value service-node-pid" id="svcSeleniumPid">—</div>
-              <div class="service-node-footer">
-                <div class="info-popover" id="tunnelPopoverSelenium">
-                  <button type="button" class="cloud-badge" id="cloudBadgeSelenium" onclick="toggleInfoPopover('tunnelPopoverSelenium')" title="Cloudflare tunnel">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                    Cloudflare
-                  </button>
-                  <div class="info-popover-panel">
-                    <div class="hint">Public tunnel URL</div>
-                    <div class="copy-field" id="svcSeleniumTunnel">—</div>
-                  </div>
-                </div>
-                <div class="service-actions" id="svcSeleniumActions">—</div>
-              </div>
-            </div>
-          </div>
-          <div class="hint" style="margin-top:14px;">Browsers detected on this machine</div>
-          <div id="localBrowsers" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
         </div>
 
-        <div class="topology-branch" id="svcProxyRow">
-          <div class="topology-arrow">→</div>
-          <div class="topology-group" id="topoNetworkGroup" style="display:none;">
-            <div class="topology-group-label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
-              Network
-            </div>
-            <div class="topology-nodes">
+        <div class="topo-cols">
+          <div class="topo-col topo-col-web">
+            <div class="flow-arrow" id="flowCerberusWeb"><span class="flow-label">drives the browser</span></div>
+            <div class="topology-group" id="topoWebGroup">
+              <div class="topology-group-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                Web
+              </div>
+              <div class="topology-nodes">
+              <div class="service-node" id="nodeExtension">
+                <div class="service-node-header">
+                  <span class="service-node-icon">Ex</span>
+                  <span class="service-node-name">Extension</span>
+                  <span class="svc-check" id="svcExtensionCheck"></span>
+                </div>
+                <div class="service-node-value" id="svcExtensionLocal">—</div>
+                <div class="service-node-value service-node-pid" id="svcExtensionPid">—</div>
+                <div class="service-node-footer">
+                  <div class="info-popover" id="tunnelPopoverExtension">
+                    <button type="button" class="cloud-badge" id="cloudBadgeExtension" onclick="toggleInfoPopover('tunnelPopoverExtension')" title="Cloudflare tunnel">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                      Cloudflare
+                    </button>
+                    <div class="info-popover-panel">
+                      <div class="hint">Public tunnel URL</div>
+                      <div class="copy-field" id="svcExtensionTunnel">—</div>
+                    </div>
+                  </div>
+                  <div class="service-actions" id="svcExtensionActions">—</div>
+                </div>
+              </div>
+
+              <div class="service-node" id="nodeSelenium">
+                <div class="service-node-header">
+                  <span class="service-node-icon">Se</span>
+                  <span class="service-node-name">Selenium</span>
+                  <span class="svc-check" id="svcSeleniumCheck"></span>
+                </div>
+                <div class="service-node-value" id="svcSeleniumLocal">—</div>
+                <div class="service-node-value service-node-pid" id="svcSeleniumPid">—</div>
+                <div class="service-node-footer">
+                  <div class="info-popover" id="tunnelPopoverSelenium">
+                    <button type="button" class="cloud-badge" id="cloudBadgeSelenium" onclick="toggleInfoPopover('tunnelPopoverSelenium')" title="Cloudflare tunnel">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                      Cloudflare
+                    </button>
+                    <div class="info-popover-panel">
+                      <div class="hint">Public tunnel URL</div>
+                      <div class="copy-field" id="svcSeleniumTunnel">—</div>
+                    </div>
+                  </div>
+                  <div class="service-actions" id="svcSeleniumActions">—</div>
+                </div>
+              </div>
+
               <div class="service-node" id="nodeProxy" style="display:none;">
                 <div class="service-node-header">
                   <span class="service-node-icon">
@@ -737,11 +791,40 @@
                 <div class="service-node-value" id="svcProxyLocal">—</div>
                 <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
                 <div class="service-node-footer">
-                  <span class="hint" title="The API relay is served by the same process: stopping the Web Proxy stops it too">shared process</span>
+                  <div class="info-popover" id="tunnelPopoverProxy">
+                    <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel shared by the Web Proxy and the API relay">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                      Cloudflare
+                    </button>
+                    <div class="info-popover-panel">
+                      <div class="hint">Public tunnel URL (Web Proxy and API relay)</div>
+                      <div class="copy-field" id="svcProxyTunnel">—</div>
+                      <div class="hint" style="margin-top:8px;">API relay URL</div>
+                      <div class="copy-field" id="svcProxyRelayUrl">—</div>
+                      <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
+                    </div>
+                  </div>
+
                   <div class="service-actions" id="svcProxyActions">—</div>
                 </div>
               </div>
 
+              </div>
+          <div class="hint" style="margin-top:14px;">Browsers detected on this machine</div>
+          <div id="localBrowsers" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
+            <div class="flow-arrow" id="flowWebOut"><span class="flow-label">browser traffic</span></div>
+          </div>
+
+          <div class="topo-col topo-col-api" id="topoApiCol">
+            <div class="flow-arrow" id="flowCerberusApi"><span class="flow-label">service calls</span></div>
+            <div class="topology-group" id="topoApiGroup">
+              <div class="topology-group-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>
+                API
+                <span class="group-note">service calls from Cerberus</span>
+              </div>
+              <div class="topology-nodes">
               <div class="service-node" id="nodeRelay" style="display:none;">
                 <div class="service-node-header">
                   <span class="service-node-icon">
@@ -753,31 +836,18 @@
                 <div class="service-node-value" id="svcRelayLocal">—</div>
                 <div class="service-node-value" id="svcRelayState">—</div>
                 <div class="service-node-footer">
-                  <span class="hint">service calls for Cerberus</span>
+                  <span class="hint" title="The API relay is served by the Web Proxy process: same tunnel, and stopping the Web Proxy stops it too">tunnel &amp; process shared with Web Proxy</span>
                 </div>
               </div>
-            </div>
-            <div class="service-node-footer" id="networkTunnelRow">
-              <div class="info-popover" id="tunnelPopoverProxy">
-                <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel shared by the Web Proxy and the API relay">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                  Cloudflare
-                </button>
-                <div class="info-popover-panel">
-                  <div class="hint">Public tunnel URL (Web Proxy and API relay)</div>
-                  <div class="copy-field" id="svcProxyTunnel">—</div>
-                  <div class="hint" style="margin-top:8px;">API relay URL</div>
-                  <div class="copy-field" id="svcProxyRelayUrl">—</div>
-                  <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
-                </div>
               </div>
             </div>
+            <div class="flow-arrow" id="flowApiOut"><span class="flow-label flow-label-wide">API calls</span><span class="flow-label flow-label-stacked">browser &amp; API traffic</span></div>
           </div>
-          <div class="topology-arrow" id="svcProxyArrow2" style="display:none;">→</div>
-          <div class="topology-internet">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-            Internet
-          </div>
+        </div>
+
+        <div class="topology-internet topo-web">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          Web
         </div>
       </div>
     </section>
@@ -1061,6 +1131,7 @@ function showRunner(status) {
   $('connectedUrl').dataset.url = status.cerberusUrl;
   $('connectedUrl').textContent = status.cerberusUrl.replace(/^https?:\/\//, '');
   $('connectedUrl').title = status.cerberusUrl;
+  $('topoCerberusUrl').textContent = status.cerberusUrl.replace(/^https?:\/\//, '');
   $('runnerNameText').textContent = 'local-runner-' + (status.runnerName || status.login || '…');
   if (oauthPoll) { clearInterval(oauthPoll); oauthPoll = null; }
   if (!runnerStarted) {
@@ -2040,16 +2111,15 @@ async function refresh() {
     setServiceValue('svcExtensionPid', status.extensionPid, '—', starting);
     setServiceValue('svcExtensionTunnel', status.extensionTunnelUrl, 'Not connected', starting, true);
     $('nodeProxy').style.display = status.robotproxyEnabled ? '' : 'none';
-    const networkVisible = !!status.robotproxyEnabled;
-    $('topoNetworkGroup').style.display = networkVisible ? '' : 'none';
-    $('svcProxyArrow2').style.display = networkVisible ? '' : 'none';
+    $('nodeRelay').style.display = status.robotproxyEnabled ? '' : 'none';
+    // The API relay is served by the Robot Proxy process: no API column without it.
+    $('topoApiCol').style.display = status.robotproxyEnabled ? '' : 'none';
     $('proxyMacInfoPopover').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'inline-flex' : 'none';
     setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
     // The API relay is served by the Robot Proxy itself, behind the same tunnel.
     relayToken = status.relayToken || '';
-    $('nodeRelay').style.display = status.robotproxyEnabled ? '' : 'none';
     setServiceValue('svcRelayLocal', status.robotproxyUrl ? status.robotproxyUrl + '/relay' : '', '—', starting);
     setServiceValue('svcRelayState', status.robotproxyPid ? 'Ready' : '', 'Stopped', starting);
     setServiceValue('svcProxyRelayUrl', status.proxyTunnelUrl ? status.proxyTunnelUrl + '/relay' : '', 'Not connected', starting);
@@ -2064,8 +2134,17 @@ async function refresh() {
     setNodeUp('nodeExtension', !!status.extensionPid);
     setNodeUp('nodeProxy', !!status.robotproxyPid);
     setNodeUp('nodeRelay', !!status.robotproxyPid);
-    $('topoLocalGroup').classList.toggle('up', !!status.seleniumPid && !!status.extensionPid);
-    $('topoNetworkGroup').classList.toggle('up', !!status.robotproxyPid);
+    // Each box/arrow is lit only while something behind it runs (services can be started separately).
+    const webUp = !!(status.seleniumPid || status.extensionPid || status.robotproxyPid);
+    const apiUp = !!status.robotproxyPid;
+    $('topoWebGroup').classList.toggle('up', webUp);
+    $('topoApiGroup').classList.toggle('up', apiUp);
+    $('flowCerberusWeb').classList.toggle('active', webUp);
+    $('flowWebOut').classList.toggle('active', !!(status.seleniumPid || status.robotproxyPid));
+    $('flowCerberusApi').classList.toggle('active', apiUp);
+    // In the stacked layout this arrow stands for both outgoing flows (see the container query).
+    $('flowApiOut').classList.toggle('active', apiUp);
+    $('flowApiOut').classList.toggle('any-active', apiUp || !!(status.seleniumPid || status.robotproxyPid));
     setCloudBadgeConnected('cloudBadgeSelenium', status.tunnelUrl);
     setCloudBadgeConnected('cloudBadgeExtension', status.extensionTunnelUrl);
     setCloudBadgeConnected('cloudBadgeProxy', status.proxyTunnelUrl);
