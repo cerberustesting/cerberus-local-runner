@@ -114,6 +114,15 @@ function createServer(config, supervisor, auth, robots, cerberusApi) {
         config.set('robotproxy.enabled', String(String(body.enabled).toLowerCase() === 'true'));
         config.save();
         sendJson(res, 200, { ok: true });
+      } else if (p === '/api/settings/ports' && req.method === 'GET') {
+        sendJson(res, 200, supervisor.portsForUi());
+      } else if (p === '/api/settings/ports' && req.method === 'POST') {
+        const body = JSON.parse(await readBody(req) || '{}');
+        try {
+          sendJson(res, 200, { ok: true, ...(await supervisor.applyPorts(body)) });
+        } catch (exception) {
+          sendJson(res, 400, { error: exception.message });
+        }
       } else if (p === '/api/robotproxy/auth-settings' && req.method === 'GET') {
         sendJson(res, 200, supervisor.authSettingsForUi());
       } else if (p === '/api/robotproxy/auth-settings' && req.method === 'POST') {

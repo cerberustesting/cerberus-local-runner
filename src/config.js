@@ -13,6 +13,9 @@ function isWindows() {
 function defaults() {
   return {
     'ui.port': '18080',
+    // Set from the Settings page: the UI port can only change when the app restarts (the window, the
+    // OAuth redirect URI and the listening socket all use the current one), so it waits here.
+    'ui.nextPort': '',
     // Bundled by fetch-dependencies.js (vendor/jre in dev, packaged app's resources root in
     // prod) - a whole directory, not a single file, but resolved the same way via component().
     'java.home': 'jre',
@@ -49,6 +52,9 @@ function defaults() {
     'robotproxy.oauthClientSecret': '',
     'robotproxy.jar': 'cerberus-robot-proxy.jar',
     'robotproxy.port': '8093',
+    // Port the proxy engine (mitmdump) listens on for the browser Selenium launches, sent to Cerberus
+    // as the executor's browser proxy port.
+    'robotproxy.browserProxyPort': '8888',
     // mitmproxy.app is a code-signed Developer ID bundle whose Python runtime only works
     // untouched - electron-builder's own re-signing pass can break it the same way jpackage's
     // did, so this stays a bare command name resolved via PATH unless pointed at an absolute path.
@@ -127,6 +133,10 @@ class RunnerConfig {
     const properties = defaults();
     if (fs.existsSync(configFile)) {
       Object.assign(properties, parseProperties(fs.readFileSync(configFile, 'utf-8')));
+    }
+    if (properties['ui.nextPort'] && properties['ui.nextPort'].trim()) {
+      properties['ui.port'] = properties['ui.nextPort'].trim();
+      properties['ui.nextPort'] = '';
     }
     if (!properties['runner.id'] || !properties['runner.id'].trim()) {
       properties['runner.id'] = 'local-' + crypto.randomUUID();

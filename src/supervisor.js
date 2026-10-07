@@ -4,6 +4,7 @@
 'use strict';
 const { spawn } = require('child_process');
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 
 const MOCK_SCRIPT = path.join(__dirname, 'mock-component.js');
@@ -371,6 +372,73 @@ class ProcessSupervisor {
       ...this.robotproxyAuthArgs()];
   }
 
+  // ---- Ports (Settings page) --------------------------------------------------------------------
+
+  static get PORT_FIELDS() {
+    return [
+      { field: 'selenium', key: 'selenium.port', label: 'Selenium', checkFree: true },
+      { field: 'extension', key: 'extension.port', label: 'Extension', checkFree: true },
+      { field: 'robotproxy', key: 'robotproxy.port', label: 'Web Proxy / API relay', checkFree: true },
+      { field: 'browserProxy', key: 'robotproxy.browserProxyPort', label: 'Browser proxy', checkFree: false },
+      { field: 'ui', key: 'ui.port', label: 'Interface', checkFree: true },
+    ];
+  }
+
+  /** Changing a port while its service runs would leave the status pointing at the wrong place. */
+  portsEditable() {
+    return (this.state === 'STOPPED' || this.state === 'ERROR') && !this.seleniumBusy && !this.extensionBusy && !this.robotproxyBusy;
+  }
+
+  portsForUi() {
+    const ports = {};
+    for (const { field, key } of ProcessSupervisor.PORT_FIELDS) ports[field] = this.config.integer(key);
+    const pending = this.config.get('ui.nextPort');
+    if (pending) ports.ui = parseInt(pending, 10); // what the next launch will use
+    return { ports, editable: this.portsEditable(), restartForUi: !!pending };
+  }
+
+  static isPortFree(port) {
+    return new Promise(resolve => {
+      const probe = net.createServer();
+      probe.once('error', () => resolve(false));
+      probe.once('listening', () => probe.close(() => resolve(true)));
+      probe.listen(port, '127.0.0.1');
+    });
+  }
+
+  /** Validates then saves the ports; throws a message naming the faulty port. Returns portsForUi(). */
+  async applyPorts(input) {
+    if (!this.portsEditable()) throw new Error('Stop the local runner before changing ports.');
+    const fields = ProcessSupervisor.PORT_FIELDS;
+    const next = {};
+    for (const { field, label } of fields) {
+      const text = String(input[field] == null ? '' : input[field]).trim();
+      if (!/^\d+$/.test(text) || Number(text) < 1 || Number(text) > 65535) throw new Error(`${label}: "${text}" is not a valid port (1-65535).`);
+      next[field] = Number(text);
+    }
+    const seen = new Map();
+    for (const { field, label } of fields) {
+      if (seen.has(next[field])) throw new Error(`${label} and ${seen.get(next[field])} cannot use the same port (${next[field]}).`);
+      seen.set(next[field], label);
+    }
+    const current = this.portsForUi().ports;
+    // The interface port is held by this very app (and, once saved, the next one is already vetted).
+    const unchanged = (field, port) => port === current[field] || (field === 'ui' && port === this.config.integer('ui.port'));
+    for (const { field, label, checkFree } of fields) {
+      if (checkFree && !unchanged(field, next[field]) && !(await ProcessSupervisor.isPortFree(next[field]))) {
+        throw new Error(`${label}: port ${next[field]} is already in use on this machine.`);
+      }
+    }
+    for (const { field, key } of fields) {
+      if (field === 'ui') continue;
+      this.config.set(key, String(next[field]));
+    }
+    this.config.set('ui.nextPort', next.ui === this.config.integer('ui.port') ? '' : String(next.ui));
+    this.config.save();
+    this.log('runner', 'Ports saved: ' + fields.map(({ field, label }) => `${label} ${next[field]}`).join(', '));
+    return this.portsForUi();
+  }
+
   // ---- Robot Proxy authentication -------------------------------------------------------------
 
   /**
@@ -659,6 +727,7 @@ class ProcessSupervisor {
       extensionBusy: this.extensionBusy,
       robotproxyBusy: this.robotproxyBusy,
       robotproxyAuthMode: this.config.get('robotproxy.authMode').toLowerCase() || 'none',
+      browserProxyPort: this.config.integer('robotproxy.browserProxyPort'),
     };
   }
 

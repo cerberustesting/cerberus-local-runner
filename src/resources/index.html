@@ -210,6 +210,10 @@
 
     .gate-wrap { display:flex; justify-content:center; padding-top:24px; }
     .gate-wrap .card { width:min(520px, 100%); }
+    .settings-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:4px 18px; margin-bottom:6px; }
+    .settings-grid input[type="text"] { width:100%; box-sizing:border-box; }
+    .settings-grid input:disabled { opacity:.55; cursor:not-allowed; }
+    .settings-locked { margin-bottom:14px; padding:10px 12px; border-radius:10px; background:var(--crb-grey-light-color); }
     .link-btn { background:transparent; padding:0; font-size:13px; font-weight:600; color:var(--crb-blue-color); }
     .link-btn:hover { background:transparent; text-decoration:underline; }
 
@@ -694,6 +698,7 @@
         <button type="button" class="sidebar-item" data-view="run" onclick="showView('run')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span data-i18n="nav.run">Campaign / Run</span></button>
         <button type="button" class="sidebar-item" data-view="services" onclick="showView('services')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg><span data-i18n="nav.services">Services</span></button>
         <button type="button" class="sidebar-item" data-view="logs" onclick="showView('logs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span data-i18n="nav.logs">Logs</span></button>
+        <button type="button" class="sidebar-item" data-view="settings" onclick="showView('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span data-i18n="nav.settings">Settings</span></button>
       </div>
       <div class="sidebar-foot">
         <button type="button" class="runner-pill" id="runnerPill" onclick="showView('runner')">
@@ -1017,6 +1022,25 @@
         </section>
       </div>
     </div>
+    <div id="view-settings" class="view" style="display:none;">
+      <div class="page-head">
+        <div>
+          <h2 class="page-title" data-i18n="nav.settings">Settings</h2>
+          <p class="page-sub" data-i18n="settings.sub">Ports used by the local services of this runner.</p>
+        </div>
+      </div>
+      <section class="card">
+        <div class="label" style="margin-bottom:14px;" data-i18n="settings.ports">Ports</div>
+        <div class="hint settings-locked" id="settingsLocked" style="display:none;" data-i18n="settings.locked">Stop the local runner to change the ports.</div>
+        <div class="settings-grid" id="portsForm"></div>
+        <div class="error" id="settingsError"></div>
+        <div class="hint" id="settingsInfo" style="min-height:18px;"></div>
+        <div class="actions" style="margin-bottom:0;">
+          <button type="button" class="primary" id="portsSave" onclick="savePorts()" data-i18n="settings.save">Save</button>
+          <button type="button" class="secondary" id="portsReset" onclick="resetPorts()" data-i18n="settings.reset">Default values</button>
+        </div>
+      </section>
+    </div>
     <div id="view-logs" class="view" style="display:none;">
       <div class="page-head">
         <div>
@@ -1080,7 +1104,10 @@ const I18N = {
     'pill.READY': 'En marche', 'pill.STARTING': 'Démarrage…', 'pill.STOPPING': 'Arrêt…', 'pill.STOPPED': 'Arrêté', 'pill.ERROR': 'Erreur', 'pill.DISCONNECTED': 'Déconnecté',
     'banner.stopped.run': 'Le runner local n\'est pas démarré. Vous pouvez parcourir mais pas lancer d\'exécution tant qu\'il n\'est pas démarré.',
     'banner.stopped.services': 'Le runner local n\'est pas démarré. Vous pouvez modifier les services mais pas les tester tant qu\'il n\'est pas démarré.',
-    'nav.runner': 'Runner', 'nav.run': 'Campagne / Run', 'nav.logs': 'Logs', 'nav.services': 'Services', 'nav.toggle': 'Réduire / agrandir le menu',
+    'nav.runner': 'Runner', 'nav.run': 'Campagne / Run', 'nav.logs': 'Logs', 'nav.services': 'Services', 'nav.settings': 'Paramètres',
+    'settings.sub': 'Ports utilisés par les services locaux de ce runner.', 'settings.ports': 'Ports', 'settings.save': 'Enregistrer', 'settings.reset': 'Valeurs par défaut',
+    'settings.locked': 'Arrêtez le runner local pour modifier les ports.', 'settings.saved': 'Ports enregistrés.',
+    'settings.uiPending': 'Le port de l\'interface passera à {port} au prochain redémarrage de l\'application.', 'nav.toggle': 'Réduire / agrandir le menu',
     'user.logout': 'Se déconnecter', 'user.theme': 'Thème', 'user.language': 'Langue',
     'run.title': 'Lancer des testcases sur ce runner', 'run.byApp': 'Par application', 'run.byTest': 'Par test',
     'run.application': 'Application', 'run.test': 'Test', 'run.testcases': 'Testcases', 'run.filter': 'Filtrer…',
@@ -1111,6 +1138,7 @@ const I18N = {
   },
 };
 const I18N_EN_FALLBACK = {
+  'settings.saved': 'Ports saved.', 'settings.uiPending': 'The interface port becomes {port} the next time the app restarts.',
   'run.application': 'Application', 'run.test': 'Test',
   'run.noMatch': 'No match.', 'run.select': 'Select…', 'run.noRobot': 'No robot selected', 'run.none2': 'None',
   'run.needSelection': 'Select at least one testcase, one country and one environment.',
@@ -1711,10 +1739,10 @@ async function syncRobotOnCerberus(status) {
       // The browser proxy is independent of the relay: only when the template asks for one.
       executor.executorProxyType = 'MITMPROXY';
       // The browser Selenium launches always runs on this same machine as the robot-proxy's
-      // mitmdump instance, so it's always reached at localhost:8888 - regardless of the tunnel
+      // mitmdump instance, so it's always reached at localhost:<browser proxy port> - regardless of the tunnel
       // URL above (that one's for Cerberus to reach the robot-proxy's own REST control API).
       executor.executorBrowserProxyHost = 'localhost';
-      executor.executorBrowserProxyPort = '8888';
+      executor.executorBrowserProxyPort = String(status.browserProxyPort || 8888);
     }
     // The Grid node here only ever registers as this machine's real OS - a robot cloned with a
     // different platform (e.g. a Windows template picked while running on a Mac) would never
@@ -1869,6 +1897,76 @@ async function saveAuthDialog() {
   }
 }
 
+
+// ---- Settings: ports -------------------------------------------------------------------------
+const PORT_DEFS = [
+  {field: 'selenium', label: 'Selenium', def: 4444, hint: 'Selenium Grid node, exposed to Cerberus through its tunnel.'},
+  {field: 'extension', label: 'Extension', def: 6555, hint: 'Cerberus extension (Sikuli, file management).'},
+  {field: 'robotproxy', label: 'Web Proxy / API relay', def: 8093, hint: 'Cerberus Robot Proxy: network capture and API relay.'},
+  {field: 'browserProxy', label: 'Browser proxy', def: 8888, hint: 'Port the Web Proxy listens on for the browser Selenium launches.'},
+  {field: 'ui', label: 'Interface', def: 18080, hint: 'This interface. Takes effect when the app restarts; the OAuth redirect URI uses it.'},
+];
+let runnerState = 'STOPPED';
+
+function renderPortsForm(ports) {
+  $('portsForm').innerHTML = PORT_DEFS.map(d => `
+    <div class="field">
+      <label class="field-label" for="port-${d.field}">${escapeHtml(d.label)}</label>
+      <input type="text" inputmode="numeric" id="port-${d.field}" value="${escapeHtml(String(ports[d.field]))}">
+      <div class="hint">${escapeHtml(d.hint)} (default ${d.def})</div>
+    </div>`).join('');
+  applySettingsLock();
+}
+
+function applySettingsLock() {
+  const locked = !['STOPPED', 'ERROR'].includes(runnerState);
+  $('settingsLocked').style.display = locked ? '' : 'none';
+  PORT_DEFS.forEach(d => { const el = $('port-' + d.field); if (el) el.disabled = locked; });
+  $('portsSave').disabled = locked;
+  $('portsReset').disabled = locked;
+}
+
+async function enterSettingsView() {
+  $('settingsError').style.display = 'none';
+  $('settingsInfo').textContent = '';
+  try {
+    const data = await fetch('/api/settings/ports').then(r => r.json());
+    renderPortsForm(data.ports);
+    if (data.restartForUi) $('settingsInfo').textContent = t('settings.uiPending').replace('{port}', data.ports.ui);
+  } catch (e) {
+    $('settingsError').textContent = e.message;
+    $('settingsError').style.display = 'block';
+  }
+}
+
+function resetPorts() {
+  PORT_DEFS.forEach(d => { $('port-' + d.field).value = d.def; });
+}
+
+async function savePorts() {
+  const error = $('settingsError');
+  error.style.display = 'none';
+  $('settingsInfo').textContent = '';
+  const body = {};
+  PORT_DEFS.forEach(d => { body[d.field] = $('port-' + d.field).value; });
+  $('portsSave').disabled = true;
+  try {
+    const response = await fetch('/api/settings/ports', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || ('HTTP ' + response.status));
+    renderPortsForm(result.ports);
+    $('settingsInfo').textContent = t('settings.saved') + (result.restartForUi ? ' ' + t('settings.uiPending').replace('{port}', result.ports.ui) : '');
+    robotSyncApplied = false; // the robot on Cerberus carries the browser proxy port
+  } catch (e) {
+    error.textContent = e.message;
+    error.style.display = 'block';
+  } finally {
+    applySettingsLock();
+  }
+}
+
 async function serviceAction(service, action) {
   try {
     await fetch('/api/services/' + service + '/' + action, {method: 'POST'});
@@ -1910,6 +2008,7 @@ function showView(name) {
   document.querySelectorAll('.content > .view').forEach(v => { v.style.display = (v.id === 'view-' + name) ? '' : 'none'; });
   if (name === 'run') enterRunView();
   if (name === 'services') enterServicesView();
+  if (name === 'settings') enterSettingsView();
 }
 
 let runSource = 'application';
@@ -2286,6 +2385,7 @@ async function refresh() {
     setCloudBadgeConnected('cloudBadgeProxy', status.proxyTunnelUrl);
 
     updateRunnerPill(status.state);
+    if (runnerState !== status.state) { runnerState = status.state; if ($('portsSave')) applySettingsLock(); }
     const ready = status.state === 'READY';
     if (ready !== runnerReady) applyRunnerReady(ready);
     setServiceActions('svcSelenium', ready, !!status.seleniumPid, !!status.seleniumBusy);
