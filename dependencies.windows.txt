@@ -3,9 +3,9 @@
 # cerberusRobotProxy and mitmdump are only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy
 # feature) - no macOS-style code-signing constraint here, so mitmdump is bundled directly.
 
-seleniumServer=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/selenium-server-4.44.0.jar
+seleniumServer=https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.49.0/selenium-server-4.49.0.jar
 cerberusExtension=https://vm.cerberus-testing.org/delivery/cerberus-robot-extension-2.1-SNAPSHOT-windows.jar
-cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/common/cerberus-robot-proxy-1.8-SNAPSHOT.jar
+cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/cerberus-robot-proxy-2.0-SNAPSHOT.jar
 cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/windows/cloudflared-windows-amd64.exe
 mitmdump=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/windows/mitmdump.exe
 jre=https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.9%2B10/OpenJDK21U-jre_x64_windows_hotspot_21.0.9_10.zip
