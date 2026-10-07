@@ -44,6 +44,7 @@ class ProcessSupervisor {
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
+    this.robotproxyRestartPending = false; // settings saved while the Robot Proxy was busy
     this.onChange = () => {};
   }
 
@@ -123,6 +124,7 @@ class ProcessSupervisor {
     this.seleniumBusy = false;
     this.extensionBusy = false;
     this.robotproxyBusy = false;
+    this.robotproxyRestartPending = false;
     this.state = 'STOPPED';
     this.log('runner', 'Stopped');
     this.onChange();
@@ -271,6 +273,34 @@ class ProcessSupervisor {
     this.onChange();
   }
 
+  /** Applies new launch settings: the old process must be gone before the new one binds the port. */
+  restartRobotProxy() {
+    if (this.state !== 'READY') return;
+    if (this.robotproxyBusy) { this.robotproxyRestartPending = true; return; } // applied when the current operation ends
+    if (!isAlive(this.robotproxy)) { this.startRobotProxy(); return; }
+    this.robotproxyBusy = true;
+    this.onChange();
+    this.restartRobotProxyInternal().catch(() => {});
+  }
+
+  async restartRobotProxyInternal() {
+    this.log('runner', 'Restarting Cerberus Robot Proxy to apply its new settings');
+    const old = this.robotproxy;
+    if (!this.namedTunnelMode()) {
+      this.destroy(this.cloudflaredProxy, 'cloudflared-proxy');
+      this.cloudflaredProxy = null;
+      this.proxyTunnelUrl = '';
+    }
+    this.destroy(old, 'robotproxy');
+    this.robotproxy = null;
+    await new Promise(resolve => {
+      if (!isAlive(old)) return resolve();
+      old.once('exit', resolve);
+      setTimeout(resolve, 6000);
+    });
+    await this.startRobotProxyInternal(); // clears the busy flag, logs its own failures
+  }
+
   startRobotProxy() {
     if (this.state !== 'READY' || this.robotproxyBusy || isAlive(this.robotproxy) || !this.config.bool('robotproxy.enabled')) return;
     this.robotproxyBusy = true;
@@ -295,6 +325,10 @@ class ProcessSupervisor {
     } finally {
       this.robotproxyBusy = false;
       this.onChange();
+      if (this.robotproxyRestartPending) {
+        this.robotproxyRestartPending = false;
+        this.restartRobotProxy();
+      }
     }
   }
 
@@ -339,29 +373,78 @@ class ProcessSupervisor {
 
   // ---- Robot Proxy authentication -------------------------------------------------------------
 
-  /** The validated authentication settings; throws a message the UI shows as the startup error. */
-  authSettings() {
-    const c = this.config;
-    const mode = c.get('robotproxy.authMode').toLowerCase() || 'none';
+  /**
+   * The validated authentication settings; throws a message the UI shows as the startup error.
+   * `get` reads a `robotproxy.*` key and defaults to the saved config (the settings form validates
+   * candidate values before saving them).
+   */
+  authSettings(get = key => this.config.get(key)) {
+    const mode = get('robotproxy.authMode').toLowerCase() || 'none';
     if (!['none', 'token', 'oauth'].includes(mode)) {
-      throw new Error(`robotproxy.authMode must be none, token or oauth (got "${c.get('robotproxy.authMode')}")`);
+      throw new Error(`robotproxy.authMode must be none, token or oauth (got "${get('robotproxy.authMode')}")`);
     }
     const settings = { mode };
     if (mode === 'token') {
       // Empty = the Robot Proxy falls back on relay.token, the same secret Cerberus is given.
-      settings.token = c.get('robotproxy.authToken') || c.get('robotproxy.relayToken');
+      settings.token = get('robotproxy.authToken') || get('robotproxy.relayToken');
     }
     if (mode === 'oauth') {
-      const missing = ['oauthIssuerUri', 'oauthClientId', 'oauthClientSecret'].filter(key => !c.get('robotproxy.' + key));
-      if (missing.length) throw new Error('robotproxy.authMode=oauth requires ' + missing.map(key => 'robotproxy.' + key).join(', '));
-      settings.issuerUri = c.get('robotproxy.oauthIssuerUri');
-      settings.audiences = c.get('robotproxy.oauthAudiences');
-      settings.tokenUrl = c.get('robotproxy.oauthTokenUrl')
+      const missing = ['oauthIssuerUri', 'oauthClientId', 'oauthClientSecret'].filter(key => !get('robotproxy.' + key));
+      if (missing.length) throw new Error('OAuth requires ' + missing.map(key => 'robotproxy.' + key).join(', '));
+      settings.issuerUri = get('robotproxy.oauthIssuerUri');
+      settings.audiences = get('robotproxy.oauthAudiences');
+      settings.tokenUrl = get('robotproxy.oauthTokenUrl')
         || settings.issuerUri.replace(/\/+$/, '') + '/protocol/openid-connect/token';
-      settings.clientId = c.get('robotproxy.oauthClientId');
-      settings.clientSecret = c.get('robotproxy.oauthClientSecret');
+      settings.clientId = get('robotproxy.oauthClientId');
+      settings.clientSecret = get('robotproxy.oauthClientSecret');
     }
     return settings;
+  }
+
+  /** What the settings form shows: everything but the secrets, only whether they are set. */
+  authSettingsForUi() {
+    const c = this.config;
+    return {
+      mode: c.get('robotproxy.authMode').toLowerCase() || 'none',
+      hasToken: !!c.get('robotproxy.authToken'),
+      issuerUri: c.get('robotproxy.oauthIssuerUri'),
+      audiences: c.get('robotproxy.oauthAudiences'),
+      tokenUrl: c.get('robotproxy.oauthTokenUrl'),
+      clientId: c.get('robotproxy.oauthClientId'),
+      hasClientSecret: !!c.get('robotproxy.oauthClientSecret'),
+      uiClientId: c.get('robotproxy.oauthUiClientId'),
+      hasUiClientSecret: !!c.get('robotproxy.oauthUiClientSecret'),
+      running: isAlive(this.robotproxy),
+    };
+  }
+
+  /**
+   * Validates then saves the settings of the form. A secret left empty keeps the saved one;
+   * `useRelayToken` drops the custom token. Settings of a mode that is not selected are kept.
+   * Running Robot Proxy is restarted to apply them. Returns { restarted }.
+   */
+  applyAuthSettings(input) {
+    const trimmed = value => (value == null ? undefined : String(value).trim());
+    const next = {};
+    next['robotproxy.authMode'] = (trimmed(input.mode) || 'none').toLowerCase();
+    const plain = { issuerUri: 'oauthIssuerUri', audiences: 'oauthAudiences', tokenUrl: 'oauthTokenUrl', clientId: 'oauthClientId', uiClientId: 'oauthUiClientId' };
+    for (const [field, key] of Object.entries(plain)) {
+      if (trimmed(input[field]) !== undefined) next['robotproxy.' + key] = trimmed(input[field]);
+    }
+    const secrets = { token: 'authToken', clientSecret: 'oauthClientSecret', uiClientSecret: 'oauthUiClientSecret' };
+    for (const [field, key] of Object.entries(secrets)) {
+      if (trimmed(input[field])) next['robotproxy.' + key] = trimmed(input[field]);
+    }
+    if (input.useRelayToken) next['robotproxy.authToken'] = '';
+    this.authSettings(key => (key in next ? next[key] : this.config.get(key))); // throws if invalid
+    Object.entries(next).forEach(([key, value]) => this.config.set(key, value));
+    this.config.save();
+    this.log('runner', 'Robot Proxy authentication set to ' + next['robotproxy.authMode']);
+    if (this.state === 'READY' && (isAlive(this.robotproxy) || this.robotproxyBusy)) {
+      this.restartRobotProxy();
+      return { restarted: true };
+    }
+    return { restarted: false };
   }
 
   robotproxyAuthArgs() {

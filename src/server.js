@@ -114,6 +114,15 @@ function createServer(config, supervisor, auth, robots, cerberusApi) {
         config.set('robotproxy.enabled', String(String(body.enabled).toLowerCase() === 'true'));
         config.save();
         sendJson(res, 200, { ok: true });
+      } else if (p === '/api/robotproxy/auth-settings' && req.method === 'GET') {
+        sendJson(res, 200, supervisor.authSettingsForUi());
+      } else if (p === '/api/robotproxy/auth-settings' && req.method === 'POST') {
+        const body = JSON.parse(await readBody(req) || '{}');
+        try {
+          sendJson(res, 200, { ok: true, ...supervisor.applyAuthSettings(body) });
+        } catch (exception) {
+          sendJson(res, 400, { error: exception.message });
+        }
       } else if (p === '/api/robotproxy/core-auth' && req.method === 'GET') {
         // The executor fields Cerberus needs to authenticate to the Robot Proxy (includes secrets: only
         // fetched by the page when it creates the robot on Cerberus).

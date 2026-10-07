@@ -71,7 +71,7 @@ only on the runner's network can be called from a remote Cerberus. The runner on
 - it generates `robotproxy.relayToken` (config.properties) on first load and passes it as `--relay.token`,
   together with `--relay.blocked-local-ports` (the runner's own UI/Selenium/Extension ports, which a relayed
   call must never reach) and `--relay.allowed-hosts` (`robotproxy.relayAllowedHosts`, optional);
-- **authentication** of the Robot Proxy (all its services) is set in `config.properties`:
+- **authentication** of the Robot Proxy (all its services) is set from the Services view (the "Auth: … · edit" link of the Web Proxy box opens a form; saving validates the values, keeps secrets left empty, and restarts the Robot Proxy to apply them) or directly in `config.properties`:
 
   | Key | Meaning |
   |---|---|
