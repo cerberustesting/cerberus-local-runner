@@ -37,7 +37,7 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | `supervisor.js` | The core: process state machine (STOPPED/STARTING/READY/STOPPING/ERROR), spawns/monitors Selenium, Extension, cloudflared tunnels and the Robot Proxy, independent per-service restart, log buffering. |
 | `server.js` | The local HTTP API (`/api/status`, `/api/start`, `/api/auth/*`, `/api/robots/*`, etc.) and static file serving for `resources/`. Also computes `runnerPlatform` (this machine's real OS, forced onto cloned robots so Selenium never rejects a session over a platform mismatch). |
 | `mock-component.js` | Stand-in process used instead of real Selenium/Extension/cloudflared when `mock.mode=true`, for fast local iteration without downloading real binaries. |
-| `resources/index.html` | The entire UI: single HTML file, no build step, no framework. Once connected it shows a side menu with five views: Runner, Campaign / Run, Services (list/edit/create Cerberus app services via `/api/cerberus/services*`, plus a Test call), Logs, Settings (the ports of Selenium, the Extension, the Web Proxy / API relay, the browser proxy and the interface itself - `GET/POST /api/settings/ports`: validated as ports in 1-65535, distinct, free on this machine, and only editable while the runner is stopped; the interface port is saved as `ui.nextPort` and applied when the app restarts). Talks only to `server.js`'s API. |
+| `resources/index.html` | The entire UI: single HTML file, no build step, no framework. Once connected it shows a side menu with five views: Runner, Campaign / Run, Services (list/edit/create Cerberus app services via `/api/cerberus/services*`, plus a Test call), Logs, Settings (the Web Proxy authentication, see below, and the ports of Selenium, the Extension, the Web Proxy / API relay, the browser proxy and the interface itself - `GET/POST /api/settings/ports`: validated as ports in 1-65535, distinct, free on this machine, and only editable while the runner is stopped; the interface port is saved as `ui.nextPort` and applied when the app restarts). Talks only to `server.js`'s API. |
 | `resources/cerberus-logo.png`, `resources/cerberus_logo_light.png` | Logos used inside the UI itself (header, OAuth panel) - not the app icon (see `build-resources/`). |
 
 ### Build & packaging
@@ -71,7 +71,7 @@ only on the runner's network can be called from a remote Cerberus. The runner on
 - it generates `robotproxy.relayToken` (config.properties) on first load and passes it as `--relay.token`,
   together with `--relay.blocked-local-ports` (the runner's own UI/Selenium/Extension ports, which a relayed
   call must never reach) and `--relay.allowed-hosts` (`robotproxy.relayAllowedHosts`, optional);
-- **authentication** of the Robot Proxy (all its services) is set from the Services view (the "Auth: … · edit" link of the Web Proxy box opens a form; saving validates the values, keeps secrets left empty, and restarts the Robot Proxy to apply them) or directly in `config.properties`:
+- **authentication** of the Robot Proxy (all its services) is set from the Settings page ("Web Proxy security" card, also reached by the "Auth: … · edit" link of the Web Proxy box; saving validates the values, keeps secrets left empty, and restarts the Robot Proxy to apply them) or directly in `config.properties`:
 
   | Key | Meaning |
   |---|---|

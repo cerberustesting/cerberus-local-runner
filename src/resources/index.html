@@ -285,9 +285,8 @@
 
     .link-btn { padding:0; background:transparent; color:var(--crb-text-muted); font-size:12px; font-weight:500; text-decoration:underline dotted; text-underline-offset:3px; text-align:left; }
     .link-btn:hover { color:var(--crb-blue-color); }
-    .auth-dialog { width:min(560px, 92vw); max-height:90vh; overflow:auto; padding:22px; border:1px solid var(--crb-new-border); border-radius:14px; background:var(--crb-bg); color:var(--crb-text); box-shadow:0 20px 50px rgb(15 23 42 / .25); }
-    .auth-dialog::backdrop { background:rgb(15 23 42 / .45); }
-    .auth-dialog input[type="text"], .auth-dialog input[type="password"], .auth-dialog select { width:100%; box-sizing:border-box; }
+    .auth-form { max-width:620px; }
+    .auth-form input[type="text"], .auth-form input[type="password"], .auth-form select { width:100%; box-sizing:border-box; }
     .auth-check { display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:13.5px; }
     .topo { display:flex; flex-direction:column; gap:0; }
     /* Same neutral look as the Web box at the bottom: Cerberus is where the calls come from, not a
@@ -637,55 +636,6 @@
     </section>
   </div>
 
-  <dialog id="authDialog" class="auth-dialog">
-    <form method="dialog" onsubmit="return false;">
-      <h3 style="margin:0 0 4px;">Web Proxy security</h3>
-      <div class="hint" style="margin-bottom:14px;">Applies to every service of the Web Proxy, the API relay included. The Web Proxy restarts to apply it.</div>
-
-      <div class="field">
-        <label class="field-label" for="authMode">Authentication</label>
-        <select id="authMode" onchange="renderAuthDialog()">
-          <option value="none">None</option>
-          <option value="token">Token</option>
-          <option value="oauth">OAuth (Keycloak)</option>
-        </select>
-      </div>
-
-      <div id="authPanelNone" class="hint">Nothing is authenticated, except the API relay, which always requires its own token.</div>
-
-      <div id="authPanelToken" style="display:none;">
-        <label class="auth-check"><input type="checkbox" id="authUseRelayToken" onchange="renderAuthDialog()"> Use the relay token (generated automatically)</label>
-        <div class="field" id="authTokenField">
-          <label class="field-label" for="authToken">Token</label>
-          <input type="password" id="authToken" autocomplete="new-password" placeholder="">
-          <div class="hint">Every route then requires <code>Authorization: Bearer &lt;token&gt;</code>. Cerberus is given the same token.</div>
-        </div>
-      </div>
-
-      <div id="authPanelOauth" style="display:none;">
-        <div class="hint" style="margin-bottom:10px;">What the Web Proxy checks</div>
-        <div class="field"><label class="field-label" for="authIssuer">Keycloak realm URL (issuer)</label><input type="text" id="authIssuer" placeholder="https://keycloak.example.com/realms/cerberus"></div>
-        <div class="field"><label class="field-label" for="authAudiences">Audience</label><input type="text" id="authAudiences" placeholder="cerberus-robot-proxy"><div class="hint">Required <code>aud</code> of the tokens. Leave empty and any token of the realm is accepted.</div></div>
-        <div class="hint" style="margin:6px 0 10px;">What Cerberus uses to get its token (client credentials)</div>
-        <div class="row">
-          <div class="field"><label class="field-label" for="authClientId">Client ID</label><input type="text" id="authClientId"></div>
-          <div class="field"><label class="field-label" for="authClientSecret">Client secret</label><input type="password" id="authClientSecret" autocomplete="new-password"></div>
-        </div>
-        <div class="field"><label class="field-label" for="authTokenUrl">Token URL</label><input type="text" id="authTokenUrl" placeholder="(issuer)/protocol/openid-connect/token"></div>
-        <div class="hint" style="margin:6px 0 10px;">Optional: browser login of the Web Proxy interface</div>
-        <div class="row">
-          <div class="field"><label class="field-label" for="authUiClientId">UI client ID</label><input type="text" id="authUiClientId"></div>
-          <div class="field"><label class="field-label" for="authUiClientSecret">UI client secret</label><input type="password" id="authUiClientSecret" autocomplete="new-password"><div class="hint">Empty = public client (PKCE)</div></div>
-        </div>
-      </div>
-
-      <div class="error" id="authDialogError"></div>
-      <div class="actions" style="margin-bottom:0;">
-        <button type="button" class="primary" id="authDialogSave" onclick="saveAuthDialog()">Save</button>
-        <button type="button" class="secondary" onclick="$('authDialog').close()">Cancel</button>
-      </div>
-    </form>
-  </dialog>
 
   <div id="runnerView" class="shell" style="display:none;">
     <nav class="sidebar">
@@ -852,7 +802,7 @@
                 </div>
                 <div class="service-node-value" id="svcProxyLocal">—</div>
                 <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
-                <div class="service-node-value"><button type="button" class="link-btn" id="svcProxyAuth" onclick="openAuthDialog()" title="Web Proxy security settings">—</button></div>
+                <div class="service-node-value"><button type="button" class="link-btn" id="svcProxyAuth" onclick="openAuthSettings()" title="Web Proxy security settings">—</button></div>
                 <div class="service-node-footer">
                   <div class="info-popover" id="tunnelPopoverProxy">
                     <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel shared by the Web Proxy and the API relay">
@@ -1040,6 +990,54 @@
           <button type="button" class="secondary" id="portsReset" onclick="resetPorts()" data-i18n="settings.reset">Default values</button>
         </div>
       </section>
+      <section class="card" id="authCard" style="margin-top:14px;">
+        <div class="label" style="margin-bottom:6px;" data-i18n="settings.security">Web Proxy security</div>
+        <div class="hint" style="margin-bottom:14px;" data-i18n="settings.securityHint">Applies to every service of the Web Proxy, the API relay included. Saving restarts the Web Proxy to apply it.</div>
+        <div class="auth-form">
+      <div class="field">
+          <label class="field-label" for="authMode">Authentication</label>
+          <select id="authMode" onchange="renderAuthDialog()">
+            <option value="none">None</option>
+            <option value="token">Token</option>
+            <option value="oauth">OAuth (Keycloak)</option>
+          </select>
+        </div>
+
+        <div id="authPanelNone" class="hint">Nothing is authenticated, except the API relay, which always requires its own token.</div>
+
+        <div id="authPanelToken" style="display:none;">
+          <label class="auth-check"><input type="checkbox" id="authUseRelayToken" onchange="renderAuthDialog()"> Use the relay token (generated automatically)</label>
+          <div class="field" id="authTokenField">
+            <label class="field-label" for="authToken">Token</label>
+            <input type="password" id="authToken" autocomplete="new-password" placeholder="">
+            <div class="hint">Every route then requires <code>Authorization: Bearer &lt;token&gt;</code>. Cerberus is given the same token.</div>
+          </div>
+        </div>
+
+        <div id="authPanelOauth" style="display:none;">
+          <div class="hint" style="margin-bottom:10px;">What the Web Proxy checks</div>
+          <div class="field"><label class="field-label" for="authIssuer">Keycloak realm URL (issuer)</label><input type="text" id="authIssuer" placeholder="https://keycloak.example.com/realms/cerberus"></div>
+          <div class="field"><label class="field-label" for="authAudiences">Audience</label><input type="text" id="authAudiences" placeholder="cerberus-robot-proxy"><div class="hint">Required <code>aud</code> of the tokens. Leave empty and any token of the realm is accepted.</div></div>
+          <div class="hint" style="margin:6px 0 10px;">What Cerberus uses to get its token (client credentials)</div>
+          <div class="row">
+            <div class="field"><label class="field-label" for="authClientId">Client ID</label><input type="text" id="authClientId"></div>
+            <div class="field"><label class="field-label" for="authClientSecret">Client secret</label><input type="password" id="authClientSecret" autocomplete="new-password"></div>
+          </div>
+          <div class="field"><label class="field-label" for="authTokenUrl">Token URL</label><input type="text" id="authTokenUrl" placeholder="(issuer)/protocol/openid-connect/token"></div>
+          <div class="hint" style="margin:6px 0 10px;">Optional: browser login of the Web Proxy interface</div>
+          <div class="row">
+            <div class="field"><label class="field-label" for="authUiClientId">UI client ID</label><input type="text" id="authUiClientId"></div>
+            <div class="field"><label class="field-label" for="authUiClientSecret">UI client secret</label><input type="password" id="authUiClientSecret" autocomplete="new-password"><div class="hint">Empty = public client (PKCE)</div></div>
+          </div>
+        </div>
+
+        </div>
+        <div class="error" id="authDialogError"></div>
+        <div class="hint" id="authInfo" style="min-height:18px;"></div>
+        <div class="actions" style="margin-bottom:0;">
+          <button type="button" class="primary" id="authDialogSave" onclick="saveAuthDialog()" data-i18n="settings.save">Save</button>
+        </div>
+      </section>
     </div>
     <div id="view-logs" class="view" style="display:none;">
       <div class="page-head">
@@ -1106,7 +1104,9 @@ const I18N = {
     'banner.stopped.services': 'Le runner local n\'est pas démarré. Vous pouvez modifier les services mais pas les tester tant qu\'il n\'est pas démarré.',
     'nav.runner': 'Runner', 'nav.run': 'Campagne / Run', 'nav.logs': 'Logs', 'nav.services': 'Services', 'nav.settings': 'Paramètres',
     'settings.sub': 'Ports utilisés par les services locaux de ce runner.', 'settings.ports': 'Ports', 'settings.save': 'Enregistrer', 'settings.reset': 'Valeurs par défaut',
-    'settings.locked': 'Arrêtez le runner local pour modifier les ports.', 'settings.saved': 'Ports enregistrés.',
+    'settings.locked': 'Arrêtez le runner local pour modifier les ports.',
+    'settings.security': 'Sécurité du Web Proxy', 'settings.securityHint': 'S\'applique à tous les services du Web Proxy, API relay compris. L\'enregistrement redémarre le Web Proxy pour l\'appliquer.',
+    'settings.authSaved': 'Authentification enregistrée.', 'settings.authSavedRestart': 'Authentification enregistrée : le Web Proxy redémarre pour l\'appliquer.', 'settings.saved': 'Ports enregistrés.',
     'settings.uiPending': 'Le port de l\'interface passera à {port} au prochain redémarrage de l\'application.', 'nav.toggle': 'Réduire / agrandir le menu',
     'user.logout': 'Se déconnecter', 'user.theme': 'Thème', 'user.language': 'Langue',
     'run.title': 'Lancer des testcases sur ce runner', 'run.byApp': 'Par application', 'run.byTest': 'Par test',
@@ -1138,6 +1138,7 @@ const I18N = {
   },
 };
 const I18N_EN_FALLBACK = {
+  'settings.authSaved': 'Authentication saved.', 'settings.authSavedRestart': 'Authentication saved: the Web Proxy restarts to apply it.',
   'settings.saved': 'Ports saved.', 'settings.uiPending': 'The interface port becomes {port} the next time the app restarts.',
   'run.application': 'Application', 'run.test': 'Test',
   'run.noMatch': 'No match.', 'run.select': 'Select…', 'run.noRobot': 'No robot selected', 'run.none2': 'None',
@@ -1823,12 +1824,17 @@ async function copyRelayToken() {
 }
 
 
-// ---- Web Proxy security settings -------------------------------------------------------------
+// ---- Web Proxy security settings (a card of the Settings page) -----------------------------------
 let authDialogState = {};
 
-async function openAuthDialog() {
-  const error = $('authDialogError');
-  error.style.display = 'none';
+/** The "Auth: ... edit" link of the Web Proxy box: the form lives on the Settings page. */
+function openAuthSettings() {
+  showView('settings');
+  setTimeout(() => $('authCard').scrollIntoView({behavior: 'smooth', block: 'start'}), 150);
+}
+
+async function loadAuthForm() {
+  $('authDialogError').style.display = 'none';
   try {
     authDialogState = await fetch('/api/robotproxy/auth-settings').then(r => r.json());
   } catch (e) {
@@ -1849,7 +1855,6 @@ async function openAuthDialog() {
   $('authUiClientSecret').value = '';
   $('authUiClientSecret').placeholder = st.hasUiClientSecret ? 'unchanged' : '';
   renderAuthDialog();
-  $('authDialog').showModal();
 }
 
 function renderAuthDialog() {
@@ -1864,6 +1869,7 @@ async function saveAuthDialog() {
   const error = $('authDialogError');
   const button = $('authDialogSave');
   error.style.display = 'none';
+  $('authInfo').textContent = '';
   const mode = $('authMode').value;
   const body = {
     mode,
@@ -1887,7 +1893,8 @@ async function saveAuthDialog() {
     if (!response.ok) throw new Error(result.error || ('HTTP ' + response.status));
     // Cerberus must be given the new authentication: re-create the robot once the proxy is back.
     robotSyncApplied = false;
-    $('authDialog').close();
+    await loadAuthForm();
+    $('authInfo').textContent = t(result.restarted ? 'settings.authSavedRestart' : 'settings.authSaved');
     refresh();
   } catch (e) {
     error.textContent = e.message;
@@ -1927,6 +1934,7 @@ function applySettingsLock() {
 }
 
 async function enterSettingsView() {
+  loadAuthForm();
   $('settingsError').style.display = 'none';
   $('settingsInfo').textContent = '';
   try {
