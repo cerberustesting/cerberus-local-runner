@@ -1,7 +1,7 @@
 // Electron main process: wires config + auth + robots + supervisor to the local HTTP server,
 // and opens the UI (resources/index.html) in a BrowserWindow.
 'use strict';
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const { RunnerConfig } = require('./config');
@@ -29,9 +29,12 @@ const httpServer = createServer(config, supervisor, auth, robots, cerberusApi);
 
 let win;
 
+const DEFAULT_WIDTH = 1270;
+
 function createWindow() {
   win = new BrowserWindow({
-    width: 1080,
+    // Never wider than the screen it opens on (a smaller laptop display).
+    width: Math.min(DEFAULT_WIDTH, screen.getPrimaryDisplay().workAreaSize.width),
     height: 860,
     icon: appIconPath,
     // No native title bar (like Slack or Claude): the page draws its own drag regions, and the OS
