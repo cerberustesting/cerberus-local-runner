@@ -1,6 +1,6 @@
 {
   "name": "cerberus-local-runner",
-  "version": "1.0.1",
+  "version": "1.1.15",
   "private": true,
   "license": "MIT",
   "description": "Local Selenium execution bridge for Cerberus - Electron app.",
