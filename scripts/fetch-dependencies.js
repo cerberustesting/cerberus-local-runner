@@ -9,10 +9,11 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
 const repoRoot = path.join(__dirname, '..');
-const vendorDir = path.join(repoRoot, 'vendor');
+const vendorDir = process.env.CRB_VENDOR_DIR || path.join(repoRoot, 'vendor');
 const robotProxyEnabled = process.env.CERBERUS_ROBOT_PROXY === 'true';
 
 // Temurin's mac archive wraps the JRE in a macOS bundle layout (Contents/Home) - Windows/Linux
@@ -27,9 +28,8 @@ if (!OS_KEY) {
 
 const manifestFile = path.join(repoRoot, `dependencies.${OS_KEY}.txt`);
 
-// [manifest key, destination filename, required]. mitmdump is never bundled on mac (see
-// config.js/README: jpackage's and electron-builder's own re-signing pass breaks its code
-// signature) - install it separately (`brew install mitmproxy`) and point mitmproxy.binary at it.
+// [manifest key, destination filename, required]. mitmdump is a single file on Windows/Linux; on macOS
+// it comes as the official mitmproxy.app bundle, installed untouched by installMitmproxyApp() below.
 const FILES = [
   ['seleniumServer', 'selenium-server.jar', true],
   ['cerberusExtension', 'cerberus-extension.jar', true],
@@ -105,6 +105,44 @@ async function installJre(manifest) {
   fs.rmSync(archivePath, { force: true });
 }
 
+// macOS: mitmdump is the official mitmproxy.app (a notarized bundle with its own Python.framework).
+// Any change to it - a re-signature included, which is why package.json excludes it from signing -
+// breaks the Python runtime ("different Team IDs"), so it is extracted as is, the download is checked
+// against the pinned sha256, and the extracted bundle must still satisfy its own signature.
+async function installMitmproxyApp(manifest) {
+  const url = manifest.mitmproxyApp;
+  if (!url) throw new Error(`Missing dependency 'mitmproxyApp' in ${manifestFile}`);
+  const expected = (manifest.mitmproxyAppSha256 || '').toLowerCase();
+  if (!expected) throw new Error(`Missing dependency 'mitmproxyAppSha256' in ${manifestFile}: the download is not pinned`);
+
+  const archivePath = path.join(vendorDir, 'mitmproxy-download.tar.gz');
+  const appDir = path.join(vendorDir, 'mitmproxy.app');
+  try {
+    console.log(`Fetching mitmproxy.app <- ${url}`);
+    await download(url, archivePath);
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(archivePath)).digest('hex');
+    if (actual !== expected) {
+      throw new Error(`mitmproxy.app download does not match its pinned sha256 (expected ${expected}, got ${actual})`);
+    }
+
+    fs.rmSync(appDir, { recursive: true, force: true });
+    execFileSync('tar', ['-xzf', archivePath, '-C', vendorDir]);
+
+    if (!fs.existsSync(path.join(appDir, 'Contents', 'MacOS', 'mitmdump'))) {
+      throw new Error('mitmproxy.app was not extracted as expected: Contents/MacOS/mitmdump is missing');
+    }
+    if (process.platform === 'darwin') {
+      try {
+        execFileSync('codesign', ['--verify', '--deep', '--strict', appDir], { stdio: 'pipe' });
+      } catch (error) {
+        throw new Error(`mitmproxy.app does not satisfy its own code signature: ${String(error.stderr || error.message).trim()}`);
+      }
+    }
+  } finally {
+    fs.rmSync(archivePath, { force: true });
+  }
+}
+
 async function main() {
   if (!fs.existsSync(manifestFile)) throw new Error(`Missing dependency manifest: ${manifestFile}`);
   const manifest = parseManifest(fs.readFileSync(manifestFile, 'utf-8'));
@@ -119,11 +157,16 @@ async function main() {
     await download(url, destination);
     if (destName === 'cloudflared' || destName === 'mitmdump') fs.chmodSync(destination, 0o755);
   }
+  if (OS_KEY === 'mac' && robotProxyEnabled) await installMitmproxyApp(manifest);
   await installJre(manifest);
   console.log(`Done - dependencies in ${vendorDir}`);
 }
 
-main().catch(error => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(error => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { installMitmproxyApp, parseManifest };

@@ -20,10 +20,12 @@ are code-signed for free by the SignPath Foundation.
   JRE 21 into `vendor/jre` (packaged app: the resources root) to launch the real (non-mock)
   Selenium/Extension/Robot Proxy jars - these are still plain Java processes, spawned like any
   other child process, but no system-installed JDK/JAVA_HOME is required;
-- on macOS, `brew install mitmproxy` separately if you enable the Robot Proxy: mitmproxy.app is a
-  code-signed Developer ID bundle that `electron-builder`'s re-signing pass would break the same
-  way `jpackage`'s did, so it's never bundled there. The app's UI shows this reminder when the
-  Robot Proxy is enabled on macOS.
+- mitmdump (the Web Proxy's engine) is bundled, so nothing has to be installed: a single executable on
+  Windows/Linux, and on macOS the official, notarized `mitmproxy.app` (about 140 MB) shipped untouched in the
+  app resources - `mac.signIgnore` in `package.json` keeps electron-builder from re-signing it, and the
+  download is checked against the sha256 pinned in `dependencies.mac.txt`. If you installed mitmproxy
+  yourself nothing conflicts: the bundled one is used unless `mitmproxy.binary` points elsewhere, and they
+  share `~/.mitmproxy` (so a CA you already trusted stays valid). The Settings page shows which one is used;
 
 ## Run in development mode
 
@@ -60,12 +62,12 @@ source changes - it can point anywhere reachable with a plain GET (this delivery
 artifact registry, a public release page). See the comments at the top of `dependencies.mac.txt`
 for the full format.
 
-`cerberusRobotProxy` and `mitmdump` are only fetched when `CERBERUS_ROBOT_PROXY=true` is set in
-the environment (Robot Proxy feature). `mitmdump` is never fetched for macOS - see above.
+`cerberusRobotProxy` and `mitmdump` (on macOS `mitmproxyApp`, with its pinned `mitmproxyAppSha256`) are only
+fetched when `CERBERUS_ROBOT_PROXY=true` is set in the environment (Robot Proxy feature).
 
 ```bash
 npm run fetch-deps                        # Selenium, Extension, cloudflared only
-CERBERUS_ROBOT_PROXY=true npm run fetch-deps   # + Robot Proxy (+ mitmdump outside macOS)
+CERBERUS_ROBOT_PROXY=true npm run fetch-deps   # + Robot Proxy and mitmdump
 ```
 
 ## Build the application
@@ -110,6 +112,8 @@ extension.port=6555
 cloudflared.mode=quick
 robotproxy.enabled=false
 robotproxy.port=8093
+# mitmdump (the default) = automatic: the bundled one, else the one found in the PATH.
+# An absolute path, or any other name, is used as is.
 mitmproxy.binary=mitmdump
 cerberus.callbackUrl=
 cerberus.callbackBearerToken=

@@ -55,9 +55,9 @@ function defaults() {
     // Port the proxy engine (mitmdump) listens on for the browser Selenium launches, sent to Cerberus
     // as the executor's browser proxy port.
     'robotproxy.browserProxyPort': '8888',
-    // mitmproxy.app is a code-signed Developer ID bundle whose Python runtime only works
-    // untouched - electron-builder's own re-signing pass can break it the same way jpackage's
-    // did, so this stays a bare command name resolved via PATH unless pointed at an absolute path.
+    // The proxy engine. The default (bare name) means "automatic": the mitmdump bundled with the app if
+    // there is one (mitmproxy.app on macOS - untouched, its signature breaks if re-signed), else the one
+    // in the PATH. An absolute path, or a bare name other than the default, is used as is.
     'mitmproxy.binary': isWindows() ? 'mitmdump.exe' : 'mitmdump',
     'cerberus.callbackUrl': '',
     'cerberus.callbackBearerToken': '',

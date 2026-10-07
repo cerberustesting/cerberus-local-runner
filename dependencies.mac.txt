@@ -7,7 +7,9 @@
 #   release page, with whatever filename the source actually uses.
 #
 # cerberusRobotProxy is only fetched when CERBERUS_ROBOT_PROXY=true (Robot Proxy feature).
-# mitmproxy is intentionally not bundled on macOS - see build-macos.sh and RunnerConfig.java.
+# mitmproxyApp is the official, signed and notarized mitmproxy.app (only fetched with the Robot Proxy).
+# It is shipped untouched: re-signing any part of it breaks its Python runtime, so the build excludes it
+# from signing (mac.signIgnore in package.json) and checks the download against mitmproxyAppSha256.
 #
 # jre points at a pinned Eclipse Temurin 21 JRE release archive - fetch-dependencies.js extracts
 # it into vendor/jre (not a plain file copy like the others) so the packaged app never needs a
@@ -18,3 +20,5 @@ cerberusExtension=https://vm.cerberus-testing.org/delivery/cerberus-robot-extens
 cerberusRobotProxy=https://vm.cerberus-testing.org/delivery/cerberus-robot-proxy-2.0-SNAPSHOT.jar
 cloudflared=https://vm.cerberus-testing.org/delivery/local-runner/1.0.0/mac-arm64/cloudflared
 jre=https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.9%2B10/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.9_10.tar.gz
+mitmproxyApp=https://downloads.mitmproxy.org/12.2.1/mitmproxy-12.2.1-macos-arm64.tar.gz
+mitmproxyAppSha256=34d2719d91ff1b85ffa64acf20d3a56d6e3a98d308eb45a827ab4266bf68e179

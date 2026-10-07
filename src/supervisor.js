@@ -369,6 +369,8 @@ class ProcessSupervisor {
       '--relay.token=' + this.config.get('robotproxy.relayToken'),
       '--relay.blocked-local-ports=' + ownPorts.join(','),
       '--relay.allowed-hosts=' + this.config.get('robotproxy.relayAllowedHosts'),
+      // Always the resolved path: a desktop-launched app has a short PATH, and an absolute path is unambiguous.
+      '--mitmproxy.command=' + this.mitmdumpLocation().path,
       ...this.robotproxyAuthArgs()];
   }
 
@@ -595,9 +597,57 @@ class ProcessSupervisor {
   }
 
   extendPathForMitmproxy(env) {
-    const configured = this.config.component('mitmproxy.binary');
-    if (!fs.existsSync(configured) || !fs.statSync(configured).isFile()) return; // bare command name: trust PATH.
-    env.PATH = path.dirname(configured) + path.delimiter + (env.PATH || '');
+    const located = this.mitmdumpLocation();
+    if (!located.found || !path.isAbsolute(located.path)) return; // bare command name: trust PATH.
+    env.PATH = path.dirname(located.path) + path.delimiter + (env.PATH || '');
+  }
+
+  // ---- Which mitmdump (the proxy engine) ----------------------------------------------------------
+
+  /** Dirs searched for a bare command: the PATH, plus Homebrew's, which an app started from the Finder lacks. */
+  static commandDirs() {
+    const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+    if (process.platform === 'darwin') dirs.push('/opt/homebrew/bin', '/usr/local/bin');
+    return dirs;
+  }
+
+  static isFile(file) {
+    try { return fs.statSync(file).isFile(); } catch (e) { return false; }
+  }
+
+  static findOnPath(name) {
+    for (const dir of ProcessSupervisor.commandDirs()) {
+      const candidate = path.join(dir, name);
+      if (!ProcessSupervisor.isFile(candidate)) continue;
+      try { fs.accessSync(candidate, fs.constants.X_OK); return candidate; } catch (e) { /* not executable */ }
+    }
+    return null;
+  }
+
+  /**
+   * The mitmdump to launch: { source: 'bundled' | 'custom' | 'path', path, found }.
+   * "mitmproxy.binary" left at its default means automatic (bundled first, then the PATH); anything else
+   * the user set is honored. The bundled one sits in the app resources: on macOS inside mitmproxy.app,
+   * which must stay untouched.
+   */
+  mitmdumpLocation() {
+    const configured = this.config.get('mitmproxy.binary');
+    const defaultName = process.platform === 'win32' ? 'mitmdump.exe' : 'mitmdump';
+    if (configured && configured !== defaultName) {
+      if (configured.includes('/') || configured.includes('\\')) {
+        const resolved = this.config.component('mitmproxy.binary');
+        return { source: 'custom', path: resolved, found: ProcessSupervisor.isFile(resolved) };
+      }
+      const onPath = ProcessSupervisor.findOnPath(configured);
+      return { source: 'custom', path: onPath || configured, found: !!onPath };
+    }
+    const bundled = [process.platform === 'darwin' ? path.join('mitmproxy.app', 'Contents', 'MacOS', 'mitmdump') : null, defaultName]
+      .filter(Boolean)
+      .map(relative => path.join(this.config.applicationDirectory, relative))
+      .find(ProcessSupervisor.isFile);
+    if (bundled) return { source: 'bundled', path: bundled, found: true };
+    const onPath = ProcessSupervisor.findOnPath(defaultName);
+    return { source: 'path', path: onPath || defaultName, found: !!onPath };
   }
 
   wireLogs(proc, source, onTunnelUrl) {

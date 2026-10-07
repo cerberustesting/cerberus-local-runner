@@ -43,6 +43,9 @@
       }
     ],
     "mac": {
+      "signIgnore": [
+        "/Resources/mitmproxy\\.app"
+      ],
       "target": [
         "dmg",
         "zip"

@@ -213,6 +213,9 @@
     .settings-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:4px 18px; margin-bottom:6px; }
     .settings-grid input[type="text"] { width:100%; box-sizing:border-box; }
     .settings-grid input:disabled { opacity:.55; cursor:not-allowed; }
+    .engine-info { font-size:13.5px; line-height:1.6; }
+    .engine-info code { font-size:12.5px; word-break:break-all; }
+    .engine-info.missing { color:var(--crb-red-dark-color); }
     .settings-locked { margin-bottom:14px; padding:10px 12px; border-radius:10px; background:var(--crb-grey-light-color); }
     .link-btn { background:transparent; padding:0; font-size:13px; font-weight:600; color:var(--crb-blue-color); }
     .link-btn:hover { background:transparent; text-decoration:underline; }
@@ -1042,6 +1045,11 @@
           <button type="button" class="primary" id="authDialogSave" onclick="saveAuthDialog()" data-i18n="settings.save">Save</button>
         </div>
       </section>
+      <section class="card" id="engineCard" style="margin-top:14px;">
+        <div class="label" style="margin-bottom:6px;" data-i18n="settings.engine">Proxy engine (mitmdump)</div>
+        <div class="hint" style="margin-bottom:10px;" data-i18n="settings.engineHint">Used by the Web Proxy to capture the traffic of the browser.</div>
+        <div id="engineInfo" class="engine-info">—</div>
+      </section>
     </div>
     <div id="view-logs" class="view" style="display:none;">
       <div class="page-head">
@@ -1109,6 +1117,9 @@ const I18N = {
     'nav.runner': 'Runner', 'nav.run': 'Campagne / Run', 'nav.logs': 'Logs', 'nav.services': 'Services', 'nav.settings': 'Paramètres',
     'settings.sub': 'Ports utilisés par les services locaux de ce runner.', 'settings.ports': 'Ports', 'settings.save': 'Enregistrer', 'settings.reset': 'Valeurs par défaut',
     'settings.locked': 'Arrêtez le runner local pour modifier les ports.',
+    'settings.engine': 'Moteur du proxy (mitmdump)', 'settings.engineHint': 'Utilisé par le Web Proxy pour capturer le trafic du navigateur.',
+    'settings.engineBundled': 'Fourni avec l\'application :', 'settings.engineCustom': 'Chemin personnalisé (mitmproxy.binary dans config.properties) :', 'settings.enginePath': 'Trouvé sur cette machine :',
+    'settings.engineMissing': 'mitmdump est introuvable. Installez mitmproxy (brew install mitmproxy) ou renseignez mitmproxy.binary dans config.properties. Sans lui, la capture du trafic ne démarre pas.',
     'settings.security': 'Sécurité du Web Proxy', 'settings.securityHint': 'S\'applique à tous les services du Web Proxy, API relay compris. L\'enregistrement redémarre le Web Proxy pour l\'appliquer.',
     'settings.authSaved': 'Authentification enregistrée.', 'settings.authSavedRestart': 'Authentification enregistrée : le Web Proxy redémarre pour l\'appliquer.', 'settings.saved': 'Ports enregistrés.',
     'settings.uiPending': 'Le port de l\'interface passera à {port} au prochain redémarrage de l\'application.', 'nav.toggle': 'Réduire / agrandir le menu',
@@ -1142,6 +1153,8 @@ const I18N = {
   },
 };
 const I18N_EN_FALLBACK = {
+  'settings.engineBundled': 'Bundled with the app:', 'settings.engineCustom': 'Custom path (mitmproxy.binary in config.properties):', 'settings.enginePath': 'Found on this machine:',
+  'settings.engineMissing': 'mitmdump was not found. Install mitmproxy (brew install mitmproxy) or set mitmproxy.binary in config.properties. Without it, traffic capture cannot start.',
   'settings.authSaved': 'Authentication saved.', 'settings.authSavedRestart': 'Authentication saved: the Web Proxy restarts to apply it.',
   'settings.saved': 'Ports saved.', 'settings.uiPending': 'The interface port becomes {port} the next time the app restarts.',
   'run.application': 'Application', 'run.test': 'Test',
@@ -1990,8 +2003,23 @@ function applySettingsLock() {
   $('portsReset').disabled = locked;
 }
 
+async function loadEngineInfo() {
+  const box = $('engineInfo');
+  try {
+    const e = await fetch('/api/settings/engine').then(r => r.json());
+    const how = {bundled: 'settings.engineBundled', custom: 'settings.engineCustom', path: 'settings.enginePath'}[e.source];
+    box.classList.toggle('missing', !e.found);
+    box.innerHTML = e.found
+      ? escapeHtml(t(how)) + '<br><code>' + escapeHtml(e.path) + '</code>'
+      : escapeHtml(t('settings.engineMissing')) + '<br><code>' + escapeHtml(e.path) + '</code>';
+  } catch (err) {
+    box.textContent = err.message;
+  }
+}
+
 async function enterSettingsView() {
   loadAuthForm();
+  loadEngineInfo();
   $('settingsError').style.display = 'none';
   $('settingsInfo').textContent = '';
   try {
