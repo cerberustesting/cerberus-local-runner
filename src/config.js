@@ -32,6 +32,21 @@ function defaults() {
     'robotproxy.enabled': 'true',
     'robotproxy.relayToken': '',
     'robotproxy.relayAllowedHosts': '',
+    // Authentication of the Robot Proxy (all its services): none | token | oauth.
+    // token: authToken is the shared secret (empty = reuse relayToken).
+    // oauth: the Robot Proxy validates Keycloak JWTs (oauthIssuerUri + oauthAudiences, optional browser
+    // login of its UI with oauthUiClientId/Secret) and Cerberus gets its own token with the
+    // client_credentials grant (oauthTokenUrl - empty = <issuer>/protocol/openid-connect/token -,
+    // oauthClientId, oauthClientSecret).
+    'robotproxy.authMode': 'none',
+    'robotproxy.authToken': '',
+    'robotproxy.oauthIssuerUri': '',
+    'robotproxy.oauthAudiences': '',
+    'robotproxy.oauthUiClientId': '',
+    'robotproxy.oauthUiClientSecret': '',
+    'robotproxy.oauthTokenUrl': '',
+    'robotproxy.oauthClientId': '',
+    'robotproxy.oauthClientSecret': '',
     'robotproxy.jar': 'cerberus-robot-proxy.jar',
     'robotproxy.port': '8093',
     // mitmproxy.app is a code-signed Developer ID bundle whose Python runtime only works

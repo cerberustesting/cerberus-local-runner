@@ -60,20 +60,33 @@ replaced by the Node/Electron code below; nothing in `src/` depends on Java anym
 | `node_modules/`, `dist/`, `build/`, `dependencies/` | npm packages, `electron-builder` output, and old Java build leftovers respectively. |
 | `recordings/` | Empty directory Selenium creates on its own next to wherever it's launched from; harmless, safe to delete, will reappear. |
 
-## Relay for Cerberus service calls
+## Relay for Cerberus service calls and Robot Proxy authentication
 
 The runner ships no proxy service of its own. The bundled Cerberus Robot Proxy (`cerberus-robot-proxy.jar`)
 hosts a `/relay` endpoint that lets Cerberus core run a service call from this machine, so APIs reachable
 only on the runner's network can be called from a remote Cerberus. The runner only packages and configures it:
 
-- it always starts the Robot Proxy and exposes it through its own cloudflared tunnel;
+- it always starts the Robot Proxy and exposes it through its own cloudflared tunnel (the Services view shows it
+  as the "Web Proxy" and "API relay" boxes, one shared tunnel);
 - it generates `robotproxy.relayToken` (config.properties) on first load and passes it as `--relay.token`,
   together with `--relay.blocked-local-ports` (the runner's own UI/Selenium/Extension ports, which a relayed
   call must never reach) and `--relay.allowed-hosts` (`robotproxy.relayAllowedHosts`, optional);
-- when it creates the `local-runner-{name}` robot on Cerberus it sets the executor's relay fields
-  (`relayActive`, `executorRelayHost`/`Port` = the Robot Proxy tunnel on 443, `executorRelayToken`)
-  independently of the browser proxy (`executorProxyType`) and of the Proxy Service address
-  (`executorProxyServiceHost`/`Port`, used by core to administer the Robot Proxy).
+- **authentication** of the Robot Proxy (all its services) is set in `config.properties`:
+
+  | Key | Meaning |
+  |---|---|
+  | `robotproxy.authMode` | `none` (default), `token` or `oauth` (an invalid value or missing OAuth setting stops the start with a clear error) |
+  | `robotproxy.authToken` | `token`: the shared secret (empty = the relay token) |
+  | `robotproxy.oauthIssuerUri`, `robotproxy.oauthAudiences` | `oauth`: Keycloak realm the Robot Proxy validates tokens against, and the required `aud` (set it) |
+  | `robotproxy.oauthUiClientId`, `robotproxy.oauthUiClientSecret` | `oauth`, optional: browser login of the Robot Proxy UI |
+  | `robotproxy.oauthTokenUrl` (default `<issuer>/protocol/openid-connect/token`), `robotproxy.oauthClientId`, `robotproxy.oauthClientSecret` | `oauth`: the client credentials Cerberus uses to get its token |
+
+- when it creates the `local-runner-{name}` robot on Cerberus (`GET /api/robotproxy/core-auth` provides the
+  secrets for that call only) it sets, independently of the browser proxy (`executorProxyType`):
+  `executorProxyServiceHost`/`Port` (the tunnel), `relayActive`, and the authentication Cerberus must use
+  (`executorProxyAuthMode` + `executorProxyAuthToken`, or `OAUTH` + token URL / client id / client secret).
+  In `none` mode the relay still requires its token on `/relay`, so Cerberus is given `TOKEN` + the relay token
+  (the Robot Proxy's other routes ignore it).
 
 The relay's contract and security model are documented in the Robot Proxy's README.
 

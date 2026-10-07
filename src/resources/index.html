@@ -790,6 +790,7 @@
                 </div>
                 <div class="service-node-value" id="svcProxyLocal">—</div>
                 <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
+                <div class="service-node-value" id="svcProxyAuth" title="robotproxy.authMode in config.properties">—</div>
                 <div class="service-node-footer">
                   <div class="info-popover" id="tunnelPopoverProxy">
                     <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel shared by the Web Proxy and the API relay">
@@ -801,7 +802,7 @@
                       <div class="copy-field" id="svcProxyTunnel">—</div>
                       <div class="hint" style="margin-top:8px;">API relay URL</div>
                       <div class="copy-field" id="svcProxyRelayUrl">—</div>
-                      <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
+                      <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy token</button>
                     </div>
                   </div>
 
@@ -1636,17 +1637,18 @@ async function syncRobotOnCerberus(status) {
       executor.executorExtensionPort = '80';
     }
     if (status.proxyTunnelUrl) {
-      // The Robot Proxy's public URL is the executor's "Proxy Service" (Cerberus core administers
-      // the proxy through it)...
+      // The Robot Proxy's public URL is the executor's "Proxy Service": Cerberus administers the proxy
+      // through it and, with relayActive, runs this robot's service calls through its relay.
       executor.executorProxyServiceHost = status.proxyTunnelUrl.replace(/^https?:\/\//, '');
       executor.executorProxyServicePort = '80';
-      // ...and the relay Cerberus core runs this robot's service calls through, authenticated with
-      // the shared token. It is served by the same Robot Proxy, but is a separate setting: https
-      // here, because the relay carries that token and the calls' own credentials.
       executor.relayActive = true;
-      executor.executorRelayHost = executor.executorProxyServiceHost;
-      executor.executorRelayPort = '443';
-      executor.executorRelayToken = status.relayToken;
+      // How Cerberus authenticates to the Robot Proxy (mode, token or OAuth client), from the runner's config.
+      const auth = await fetch('/api/robotproxy/core-auth').then(r => r.json()).catch(() => ({}));
+      if (auth.error) {
+        $('robotSelection').textContent = 'Robot Proxy authentication: ' + auth.error;
+      } else {
+        Object.assign(executor, auth);
+      }
     }
     if (status.proxyTunnelUrl && detectProxyType(template) !== 'NONE') {
       // The browser proxy is independent of the relay: only when the template asks for one.
@@ -1724,13 +1726,15 @@ function setServiceActions(prefix, actionable, running, busy) {
     : `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','start')" title="Start">${iconSvg(START_ICON_PATH)}</button>`;
 }
 
-let relayToken = '';
 async function copyRelayToken() {
-  if (!relayToken) return;
-  try { await navigator.clipboard.writeText(relayToken); } catch (e) { return; }
   const button = $('relayTokenCopy');
-  button.textContent = 'Copied';
-  setTimeout(() => { button.textContent = 'Copy API relay token'; }, 1500);
+  const done = text => { button.textContent = text; setTimeout(() => { button.textContent = 'Copy token'; }, 1500); };
+  try {
+    const auth = await fetch('/api/robotproxy/core-auth').then(r => r.json());
+    if (!auth.executorProxyAuthToken) { done(auth.error ? 'Auth error' : 'No token (OAuth)'); return; }
+    await navigator.clipboard.writeText(auth.executorProxyAuthToken);
+    done('Copied');
+  } catch (e) { done('Failed'); }
 }
 
 async function serviceAction(service, action) {
@@ -2117,9 +2121,9 @@ async function refresh() {
     $('proxyMacInfoPopover').style.display = (status.robotproxyEnabled && navigator.platform.startsWith('Mac')) ? 'inline-flex' : 'none';
     setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
+    $('svcProxyAuth').textContent = 'Auth: ' + (status.robotproxyAuthMode || 'none');
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
     // The API relay is served by the Robot Proxy itself, behind the same tunnel.
-    relayToken = status.relayToken || '';
     setServiceValue('svcRelayLocal', status.robotproxyUrl ? status.robotproxyUrl + '/relay' : '', '—', starting);
     setServiceValue('svcRelayState', status.robotproxyPid ? 'Ready' : '', 'Stopped', starting);
     setServiceValue('svcProxyRelayUrl', status.proxyTunnelUrl ? status.proxyTunnelUrl + '/relay' : '', 'Not connected', starting);

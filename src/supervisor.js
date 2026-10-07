@@ -333,7 +333,76 @@ class ProcessSupervisor {
     return [this.javaBinary(), '-jar', jar, '--server.port=' + this.config.integer('robotproxy.port'),
       '--relay.token=' + this.config.get('robotproxy.relayToken'),
       '--relay.blocked-local-ports=' + ownPorts.join(','),
-      '--relay.allowed-hosts=' + this.config.get('robotproxy.relayAllowedHosts')];
+      '--relay.allowed-hosts=' + this.config.get('robotproxy.relayAllowedHosts'),
+      ...this.robotproxyAuthArgs()];
+  }
+
+  // ---- Robot Proxy authentication -------------------------------------------------------------
+
+  /** The validated authentication settings; throws a message the UI shows as the startup error. */
+  authSettings() {
+    const c = this.config;
+    const mode = c.get('robotproxy.authMode').toLowerCase() || 'none';
+    if (!['none', 'token', 'oauth'].includes(mode)) {
+      throw new Error(`robotproxy.authMode must be none, token or oauth (got "${c.get('robotproxy.authMode')}")`);
+    }
+    const settings = { mode };
+    if (mode === 'token') {
+      // Empty = the Robot Proxy falls back on relay.token, the same secret Cerberus is given.
+      settings.token = c.get('robotproxy.authToken') || c.get('robotproxy.relayToken');
+    }
+    if (mode === 'oauth') {
+      const missing = ['oauthIssuerUri', 'oauthClientId', 'oauthClientSecret'].filter(key => !c.get('robotproxy.' + key));
+      if (missing.length) throw new Error('robotproxy.authMode=oauth requires ' + missing.map(key => 'robotproxy.' + key).join(', '));
+      settings.issuerUri = c.get('robotproxy.oauthIssuerUri');
+      settings.audiences = c.get('robotproxy.oauthAudiences');
+      settings.tokenUrl = c.get('robotproxy.oauthTokenUrl')
+        || settings.issuerUri.replace(/\/+$/, '') + '/protocol/openid-connect/token';
+      settings.clientId = c.get('robotproxy.oauthClientId');
+      settings.clientSecret = c.get('robotproxy.oauthClientSecret');
+    }
+    return settings;
+  }
+
+  robotproxyAuthArgs() {
+    const auth = this.authSettings();
+    const args = ['--robotproxy.auth.mode=' + auth.mode];
+    if (auth.mode === 'token' && this.config.get('robotproxy.authToken')) {
+      args.push('--robotproxy.auth.token=' + auth.token);
+    }
+    if (auth.mode === 'oauth') {
+      args.push('--spring.security.oauth2.resourceserver.jwt.issuer-uri=' + auth.issuerUri);
+      if (auth.audiences) args.push('--spring.security.oauth2.resourceserver.jwt.audiences=' + auth.audiences);
+      else this.log('runner', 'Warning: robotproxy.oauthAudiences is empty, the Robot Proxy accepts any token of the realm');
+      const uiClientId = this.config.get('robotproxy.oauthUiClientId');
+      if (uiClientId) {
+        args.push('--robotproxy.auth.oauth2.ui.client-id=' + uiClientId);
+        const uiSecret = this.config.get('robotproxy.oauthUiClientSecret');
+        if (uiSecret) args.push('--robotproxy.auth.oauth2.ui.client-secret=' + uiSecret);
+      }
+    }
+    return args;
+  }
+
+  /**
+   * What Cerberus needs on the robot executor to talk to this Robot Proxy. In "none" mode the
+   * Robot Proxy still requires the relay token on /relay, which Cerberus sends as a Bearer token
+   * (the other routes simply ignore it).
+   */
+  coreProxyAuth() {
+    const auth = this.authSettings();
+    if (auth.mode === 'oauth') {
+      return {
+        executorProxyAuthMode: 'OAUTH',
+        executorProxyOauthTokenUrl: auth.tokenUrl,
+        executorProxyOauthClientId: auth.clientId,
+        executorProxyOauthClientSecret: auth.clientSecret,
+      };
+    }
+    return {
+      executorProxyAuthMode: 'TOKEN',
+      executorProxyAuthToken: auth.mode === 'token' ? auth.token : this.config.get('robotproxy.relayToken'),
+    };
   }
 
   mockCommand(component, port) {
@@ -357,8 +426,10 @@ class ProcessSupervisor {
     const safeLogCommand = [...command];
     const tokenIndex = safeLogCommand.indexOf('--token');
     if (tokenIndex >= 0 && tokenIndex + 1 < safeLogCommand.length) safeLogCommand[tokenIndex + 1] = '********';
+    const SECRET_ARGS = /^(--(?:relay\.token|robotproxy\.auth\.token|robotproxy\.auth\.oauth2\.ui\.client-secret))=/;
     for (let i = 0; i < safeLogCommand.length; i++) {
-      if (safeLogCommand[i].startsWith('--relay.token=')) safeLogCommand[i] = '--relay.token=********';
+      const secret = SECRET_ARGS.exec(safeLogCommand[i]);
+      if (secret) safeLogCommand[i] = secret[1] + '=********';
     }
     this.log('runner', 'Launch: ' + safeLogCommand.join(' '));
 
@@ -504,8 +575,7 @@ class ProcessSupervisor {
       seleniumBusy: this.seleniumBusy,
       extensionBusy: this.extensionBusy,
       robotproxyBusy: this.robotproxyBusy,
-      // Shared secret the Robot Proxy's relay expects from Cerberus (see robotproxyCommand()).
-      relayToken: this.config.get('robotproxy.relayToken'),
+      robotproxyAuthMode: this.config.get('robotproxy.authMode').toLowerCase() || 'none',
     };
   }
 
