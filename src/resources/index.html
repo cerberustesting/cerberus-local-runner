@@ -736,6 +736,7 @@
                 </div>
                 <div class="service-node-value" id="svcProxyLocal">—</div>
                 <div class="service-node-value service-node-pid" id="svcProxyPid">—</div>
+                <div class="service-node-value" id="svcProxyRelay">—</div>
                 <div class="service-node-footer">
                   <div class="info-popover" id="tunnelPopoverProxy">
                     <button type="button" class="cloud-badge" id="cloudBadgeProxy" onclick="toggleInfoPopover('tunnelPopoverProxy')" title="Cloudflare tunnel">
@@ -745,6 +746,9 @@
                     <div class="info-popover-panel">
                       <div class="hint">Public tunnel URL</div>
                       <div class="copy-field" id="svcProxyTunnel">—</div>
+                      <div class="hint" style="margin-top:8px;">API relay (Cerberus service calls) goes through the same tunnel</div>
+                      <div class="copy-field" id="svcProxyRelayUrl">—</div>
+                      <button type="button" class="outline-btn" id="relayTokenCopy" style="margin-top:6px;" onclick="copyRelayToken()">Copy API relay token</button>
                     </div>
                   </div>
                   <div class="service-actions" id="svcProxyActions">—</div>
@@ -1632,6 +1636,15 @@ function setServiceActions(prefix, actionable, running, busy) {
     : `<button type="button" class="service-action-btn" onclick="serviceAction('${api}','start')" title="Start">${iconSvg(START_ICON_PATH)}</button>`;
 }
 
+let relayToken = '';
+async function copyRelayToken() {
+  if (!relayToken) return;
+  try { await navigator.clipboard.writeText(relayToken); } catch (e) { return; }
+  const button = $('relayTokenCopy');
+  button.textContent = 'Copied';
+  setTimeout(() => { button.textContent = 'Copy API relay token'; }, 1500);
+}
+
 async function serviceAction(service, action) {
   try {
     await fetch('/api/services/' + service + '/' + action, {method: 'POST'});
@@ -2017,6 +2030,10 @@ async function refresh() {
     setServiceValue('svcProxyLocal', status.robotproxyUrl, '—', starting, true);
     setServiceValue('svcProxyPid', status.robotproxyPid, '—', starting);
     setServiceValue('svcProxyTunnel', status.proxyTunnelUrl, 'Not connected', starting, true);
+    // The API relay is served by the Robot Proxy itself, behind the same tunnel.
+    relayToken = status.relayToken || '';
+    $('svcProxyRelay').textContent = status.robotproxyPid ? 'API relay · ready' : 'API relay · stopped';
+    setServiceValue('svcProxyRelayUrl', status.proxyTunnelUrl ? status.proxyTunnelUrl + '/relay' : '', 'Not connected', starting);
     const globalTransitioning = ['STARTING', 'STOPPING'].includes(status.state);
     setServiceCheck('svcSeleniumCheck', !!status.seleniumPid && !!status.tunnelUrl, globalTransitioning || !!status.seleniumBusy);
     setServiceCheck('svcExtensionCheck', !!status.extensionPid && !!status.extensionTunnelUrl, globalTransitioning || !!status.extensionBusy);
